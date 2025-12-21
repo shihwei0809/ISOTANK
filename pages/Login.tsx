@@ -25,7 +25,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setError(res.message || '登入失敗');
       }
     } catch (err) {
-        setError('網路連線錯誤');
+      setError('網路連線錯誤');
     } finally {
       setLoading(false);
     }
@@ -73,9 +73,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </form>
         <div className="mt-4 text-xs text-center text-slate-400">
-            測試帳號： <br/>
-            帳號: <b>admin</b> 密碼: <b>1234</b> <br/>
-            帳號: <b>view</b> 密碼: <b>1234</b>
+          測試帳號： <br />
+          帳號: <b>view</b> 密碼: <b>1234</b>
         </div>
       </div>
     </div>
