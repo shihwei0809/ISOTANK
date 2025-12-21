@@ -1,250 +1,229 @@
 import React, { useState, useEffect } from 'react';
-import { Tank, Zone, RegistryItem, LogEntry } from '../types';
-import { api } from '../services/api';
+import { api } from '../services/api'; // 確保路徑正確
+import { Tank, InventoryItem, Zone } from '../types';
 
 interface EntryProps {
   zones: Zone[];
-  inventory: Tank[];
-  logs: LogEntry[];
-  registry: RegistryItem[];
-  isAdmin: boolean;
+  inventory: InventoryItem[];
+  onRefresh: () => void;
   user: string;
-  onEntry: (data: any) => Promise<void>;
 }
 
-const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin, user, onEntry }) => {
+const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
   const [formData, setFormData] = useState({
-    time: '',
     tankId: '',
     content: '',
-    zone: '',
-    total: '',
-    head: '',
-    empty: '',
+    zone: '', // 預設會自動選擇
+    netWeight: 0,
+    totalWeight: '',
+    headWeight: '',
+    emptyWeight: '',
     remark: '',
+    customTime: ''
   });
 
-  const [autoMsg, setAutoMsg] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null);
+  const [message, setMessage] = useState({ text: '', type: '' });
+  const [loading, setLoading] = useState(false);
 
+  // 當 zones 資料載入後，預設選擇第一個區域 (通常是本廠)
   useEffect(() => {
-    // Set default time
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    setFormData((prev) => ({ ...prev, time: now.toISOString().slice(0, 16), zone: zones[0]?.id || '' }));
+    if (zones.length > 0 && !formData.zone) {
+      setFormData(prev => ({ ...prev, zone: zones[0].name })); // 假設用 name 或 id
+    }
   }, [zones]);
 
-  const handleTankIdChange = (val: string) => {
-    const cleanVal = val.toUpperCase().trim();
-    setFormData((prev) => ({ ...prev, tankId: cleanVal }));
+  // 計算淨重：總重 - 車頭 - 空櫃
+  useEffect(() => {
+    const total = parseFloat(formData.totalWeight) || 0;
+    const head = parseFloat(formData.headWeight) || 0;
+    const empty = parseFloat(formData.emptyWeight) || 0;
 
-    // Clear data if cleared
-    if (cleanVal.length === 0) {
-      setFormData((prev) => ({ ...prev, empty: '', content: '', total: '', head: '', remark: '' }));
-      setAutoMsg(null);
+    // 只有當三個都有值的時候才計算，避免出現負數或怪異數字
+    if (total > 0 && head > 0 && empty > 0) {
+      const net = Math.max(0, total - head - empty);
+      setFormData(prev => ({ ...prev, netWeight: net }));
+    } else {
+      setFormData(prev => ({ ...prev, netWeight: 0 }));
     }
-  };
+  }, [formData.totalWeight, formData.headWeight, formData.emptyWeight]);
 
+  // 🔴 關鍵修復：車號輸入完畢離開時，去抓取歷史資料
   const handleTankBlur = async () => {
-    const cleanVal = formData.tankId.trim();
-    if (!cleanVal) return;
+    const id = formData.tankId.trim().toUpperCase();
+    if (!id) return;
 
-    // 1. Check local inventory for warning (Always Check)
-    const inStock = inventory.find((t) => t.id === cleanVal);
-    let msg: { type: 'error' | 'success' | 'info'; text: string } | null = null;
+    // 稍微顯示讀取中(非必要，但體驗較好)
+    setLoading(true);
 
-    if (inStock) {
-      const zName = zones.find((z) => z.id === inStock.zone)?.name || inStock.zone;
-      msg = { type: 'error', text: `目前位於：${zName}` };
+    // 呼叫後端 API 查詢
+    const res = await api.getTankMaintenance(id);
+
+    if (res.status === 'success' && res.tank) {
+      // 自動帶入資料
+      setFormData(prev => ({
+        ...prev,
+        content: res.tank.content || prev.content, // 如果歷史有就帶入，沒有就維持現狀
+        totalWeight: res.tank.lastTotal ? String(res.tank.lastTotal) : prev.totalWeight,
+        headWeight: res.tank.lastHead ? String(res.tank.lastHead) : prev.headWeight,
+        emptyWeight: res.tank.empty ? String(res.tank.empty) : prev.emptyWeight,
+        // 如果需要，也可以帶入上次的備註
+        // remark: res.tank.lastRemark || prev.remark 
+      }));
     }
-
-    // 2. Call API for history data
-    try {
-      const res = await api.getTankMaintenance(cleanVal);
-      if (res.status === 'success' && res.tank) {
-        setFormData(prev => ({
-          ...prev,
-          content: res.tank.content || prev.content,
-          total: res.tank.lastTotal ? String(res.tank.lastTotal) : prev.total,
-          head: res.tank.lastHead ? String(res.tank.lastHead) : prev.head,
-          empty: res.tank.empty ? String(res.tank.empty) : prev.empty,
-        }));
-
-        if (!msg) msg = { type: 'success', text: '找到歷史資料' };
-      }
-    } catch (e) {
-      console.error(e);
-    }
-
-    setAutoMsg(inStock ? { ...msg!, text: msg!.text + ' (自動填入)' } : (msg || { type: 'info', text: '新槽車 (無紀錄)' }));
+    setLoading(false);
   };
-
-  const netWeight = Math.max(0, (parseFloat(formData.total) || 0) - (parseFloat(formData.head) || 0) - (parseFloat(formData.empty) || 0));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) return;
+    if (!formData.tankId || !formData.zone) {
+      setMessage({ text: '請填寫完整車號與區域', type: 'error' });
+      return;
+    }
 
-    const zoneObj = zones.find(z => z.id === formData.zone);
+    setLoading(true);
+    // 尋找對應的 Zone ID (如果後端需要 ID)
+    const selectedZone = zones.find(z => z.name === formData.zone) || zones[0];
+    const zoneId = selectedZone ? selectedZone.id : 'Z-01'; // 預防萬一
 
-    await onEntry({
-      id: formData.tankId,
+    const payload = {
+      id: formData.tankId.toUpperCase(),
       content: formData.content,
-      zone: formData.zone,
-      zoneName: zoneObj?.name || formData.zone,
-      netWeight,
-      emptyWeight: formData.empty,
-      totalWeight: formData.total,
-      headWeight: formData.head,
+      zone: zoneId,           // 傳送代號 (Z-01)
+      zoneName: formData.zone, // 傳送中文名稱 (本廠) 寫入 Log 用
+      netWeight: formData.netWeight,
+      totalWeight: formData.totalWeight,
+      headWeight: formData.headWeight,
+      emptyWeight: formData.emptyWeight,
       remark: formData.remark,
-      customTime: formData.time,
-      user: user
-    });
+      user: user,
+      customTime: formData.customTime || undefined
+    };
 
-    // Reset form partially
-    setFormData(prev => ({
-      ...prev,
-      tankId: '',
-      content: '',
-      total: '',
-      head: '',
-      empty: '',
-      remark: '',
-    }));
-    setAutoMsg(null);
+    const res = await api.gateIn(payload);
+
+    if (res.status === 'success') {
+      setMessage({ text: '進場作業成功！', type: 'success' });
+      // 清空表單，保留區域
+      setFormData({
+        tankId: '', content: '', zone: formData.zone, netWeight: 0,
+        totalWeight: '', headWeight: '', emptyWeight: '', remark: '', customTime: ''
+      });
+      onRefresh(); // 通知上層更新列表
+    } else {
+      setMessage({ text: res.message || '作業失敗', type: 'error' });
+    }
+    setLoading(false);
+
+    // 3秒後消除訊息
+    setTimeout(() => setMessage({ text: '', type: '' }), 3000);
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-xl shadow-sm border border-slate-200 animate-fade-in">
-      {!isAdmin && (
-        <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg text-center font-bold">
-          僅供檢視 (Read Only)
+    <div className="p-4 max-w-lg mx-auto bg-white rounded-lg shadow-md">
+      <h2 className="text-xl font-bold mb-4 text-gray-700">🚛 槽車進場作業</h2>
+
+      {message.text && (
+        <div className={`mb-4 p-2 rounded text-center ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          {message.text}
         </div>
       )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* 車號 */}
         <div>
-          <label className="font-bold block mb-1 text-slate-600">時間 (Time)</label>
-          <input
-            type="datetime-local"
-            value={formData.time}
-            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-            className={`w-full border-2 border-slate-200 p-3 rounded-lg focus:border-amber-500 outline-none transition text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
-            disabled={!isAdmin}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="font-bold block mb-1 text-slate-600">槽號 (Tank ID)</label>
+          <label className="block text-sm font-bold text-gray-700">車號 (Tank ID)</label>
           <input
             type="text"
-            value={formData.tankId}
-            onChange={(e) => handleTankIdChange(e.target.value)}
-            className={`w-full border-2 border-slate-200 p-3 rounded-lg uppercase focus:border-amber-500 outline-none transition text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
+            className="w-full p-2 border border-gray-300 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none"
             placeholder="例如: TNKU1234567"
-            disabled={!isAdmin}
-            onBlur={handleTankBlur}
+            value={formData.tankId}
+            onChange={e => setFormData({ ...formData, tankId: e.target.value.toUpperCase() })}
+            onBlur={handleTankBlur} // 🟢 這裡觸發自動帶入
             required
           />
-          <div className="h-5 mt-1 text-sm font-bold flex items-center">
-            {autoMsg && (
-              <span className={autoMsg.type === 'error' ? 'text-red-600' : autoMsg.type === 'success' ? 'text-green-600' : 'text-slate-500'}>
-                {autoMsg.type === 'error' && <i className="fa-solid fa-triangle-exclamation mr-1"></i>}
-                {autoMsg.type === 'success' && <i className="fa-solid fa-check mr-1"></i>}
-                {autoMsg.text}
-              </span>
-            )}
-          </div>
         </div>
 
+        {/* 內容物 */}
         <div>
-          <label className="font-bold block mb-1 text-slate-600">內容物 (Content)</label>
+          <label className="block text-sm font-bold text-gray-700">內容物 (Content)</label>
           <input
             type="text"
+            className="w-full p-2 border border-gray-300 rounded mt-1"
             value={formData.content}
-            onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-            className={`w-full border-2 border-slate-200 p-3 rounded-lg focus:border-amber-500 outline-none text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
-            disabled={!isAdmin}
-            required
+            onChange={e => setFormData({ ...formData, content: e.target.value })}
           />
         </div>
 
+        {/* 區域選擇 */}
         <div>
-          <label className="font-bold block mb-1 text-slate-600">區域 (Zone)</label>
+          <label className="block text-sm font-bold text-gray-700">區域 (Zone)</label>
           <select
+            className="w-full p-2 border border-gray-300 rounded mt-1"
             value={formData.zone}
-            onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-            className={`w-full border-2 border-slate-200 p-3 rounded-lg bg-white focus:border-amber-500 outline-none text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
-            disabled={!isAdmin}
+            onChange={e => setFormData({ ...formData, zone: e.target.value })}
           >
-            {zones.map((z) => (
-              <option key={z.id} value={z.id}>
-                {z.name}
-              </option>
+            {zones.map(z => (
+              <option key={z.id} value={z.name}>{z.name}</option>
             ))}
           </select>
         </div>
 
+        {/* 重量區塊：總重 / 車頭 / 空櫃 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="font-bold block mb-1 text-slate-600">總重 (Total Weight)</label>
-            <input
-              type="number"
-              step="10"
-              value={formData.total}
-              onChange={(e) => setFormData({ ...formData, total: e.target.value })}
-              className={`w-full border-2 border-slate-200 p-3 rounded-lg focus:border-amber-500 outline-none text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
-              disabled={!isAdmin}
-            />
+            <label className="block text-sm font-bold text-gray-700">總重 (Total)</label>
+            <input type="number" step="0.01" className="w-full p-2 border rounded mt-1"
+              value={formData.totalWeight} onChange={e => setFormData({ ...formData, totalWeight: e.target.value })} />
           </div>
           <div>
-            <label className="font-bold block mb-1 text-slate-600">車頭重 (Head Weight)</label>
-            <input
-              type="number"
-              step="10"
-              value={formData.head}
-              onChange={(e) => setFormData({ ...formData, head: e.target.value })}
-              className={`w-full border-2 border-slate-200 p-3 rounded-lg focus:border-amber-500 outline-none text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
-              disabled={!isAdmin}
-            />
+            <label className="block text-sm font-bold text-gray-700">車頭重 (Head)</label>
+            <input type="number" step="0.01" className="w-full p-2 border rounded mt-1"
+              value={formData.headWeight} onChange={e => setFormData({ ...formData, headWeight: e.target.value })} />
           </div>
         </div>
 
         <div>
-          <label className="font-bold block mb-1 text-slate-600">空櫃重 (Empty Weight)</label>
-          <input
-            type="number"
-            value={formData.empty}
-            onChange={(e) => setFormData({ ...formData, empty: e.target.value })}
-            className={`w-full border-2 border-slate-200 p-3 rounded-lg focus:border-amber-500 outline-none text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
-            disabled={!isAdmin}
-          />
+          <label className="block text-sm font-bold text-gray-700">空櫃重 (Empty)</label>
+          <input type="number" step="0.01" className="w-full p-2 border rounded mt-1"
+            value={formData.emptyWeight} onChange={e => setFormData({ ...formData, emptyWeight: e.target.value })} />
         </div>
 
+        {/* 自動計算的淨重 */}
+        <div className="bg-blue-50 p-3 rounded text-center">
+          <span className="text-gray-600 font-bold">淨重 (Net Weight): </span>
+          <span className="text-2xl font-bold text-blue-600">{formData.netWeight}</span>
+        </div>
+
+        {/* 備註 */}
         <div>
-          <label className="font-bold block mb-1 text-slate-600">備註 (Remark)</label>
+          <label className="block text-sm font-bold text-gray-700">備註 (Remark)</label>
           <input
             type="text"
+            className="w-full p-2 border border-gray-300 rounded mt-1"
             value={formData.remark}
-            onChange={(e) => setFormData({ ...formData, remark: e.target.value })}
-            className={`w-full border-2 border-slate-200 p-3 rounded-lg focus:border-amber-500 outline-none text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
-            placeholder="選填 (Optional)"
-            disabled={!isAdmin}
+            onChange={e => setFormData({ ...formData, remark: e.target.value })}
           />
         </div>
 
-        <div className="bg-blue-50 p-4 rounded-lg flex justify-between items-center">
-          <span className="text-slate-600 font-bold">淨重 (Net Weight)</span>
-          <span className="text-2xl font-bold text-blue-600">{netWeight.toLocaleString()}</span>
+        {/* 自訂時間 (選填) */}
+        <div>
+          <label className="block text-sm text-gray-500">補登時間 (選填)</label>
+          <input
+            type="datetime-local"
+            className="w-full p-2 border border-gray-300 rounded mt-1 text-gray-500 text-sm"
+            value={formData.customTime}
+            onChange={e => setFormData({ ...formData, customTime: e.target.value })}
+          />
         </div>
 
-        {isAdmin && (
-          <button
-            type="submit"
-            className="w-full bg-slate-900 text-white p-4 rounded-lg font-bold text-lg hover:bg-slate-800 transition shadow-lg mt-4"
-          >
-            確認作業 (進場 / 更新 / 移區)
-          </button>
-        )}
+        <button
+          type="submit"
+          disabled={loading}
+          className={`w-full p-3 text-white font-bold rounded shadow transition 
+            ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+        >
+          {loading ? '處理中...' : '確認進場'}
+        </button>
       </form>
     </div>
   );
