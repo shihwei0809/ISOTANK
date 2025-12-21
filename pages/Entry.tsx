@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../services/api'; // 確保路徑正確
-import { Tank, InventoryItem, Zone } from '../types';
+import { api } from '../services/api';
+import { InventoryItem, Zone } from '../types';
 
 interface EntryProps {
   zones: Zone[];
@@ -10,35 +10,43 @@ interface EntryProps {
 }
 
 const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
+  // 取得現在時間的函式 (格式: YYYY-MM-DDTHH:mm)
+  const getCurrentTime = () => {
+    const now = new Date();
+    // 處理時區問題，確保顯示的是當地時間
+    const offset = now.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+    return localISOTime;
+  };
+
   const [formData, setFormData] = useState({
     tankId: '',
     content: '',
-    zone: '', // 預設會自動選擇
+    zone: '',
     netWeight: 0,
     totalWeight: '',
     headWeight: '',
     emptyWeight: '',
     remark: '',
-    customTime: ''
+    customTime: getCurrentTime() // 🟢 預設直接帶入現在時間
   });
 
   const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
 
-  // 當 zones 資料載入後，預設選擇第一個區域 (通常是本廠)
+  // 當 zones 資料載入後，預設選擇第一個區域
   useEffect(() => {
     if (zones.length > 0 && !formData.zone) {
-      setFormData(prev => ({ ...prev, zone: zones[0].name })); // 假設用 name 或 id
+      setFormData(prev => ({ ...prev, zone: zones[0].name }));
     }
   }, [zones]);
 
-  // 計算淨重：總重 - 車頭 - 空櫃
+  // 計算淨重
   useEffect(() => {
     const total = parseFloat(formData.totalWeight) || 0;
     const head = parseFloat(formData.headWeight) || 0;
     const empty = parseFloat(formData.emptyWeight) || 0;
 
-    // 只有當三個都有值的時候才計算，避免出現負數或怪異數字
     if (total > 0 && head > 0 && empty > 0) {
       const net = Math.max(0, total - head - empty);
       setFormData(prev => ({ ...prev, netWeight: net }));
@@ -47,27 +55,19 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     }
   }, [formData.totalWeight, formData.headWeight, formData.emptyWeight]);
 
-  // 🔴 關鍵修復：車號輸入完畢離開時，去抓取歷史資料
+  // 車號輸入完畢離開時，抓取歷史資料
   const handleTankBlur = async () => {
     const id = formData.tankId.trim().toUpperCase();
     if (!id) return;
-
-    // 稍微顯示讀取中(非必要，但體驗較好)
     setLoading(true);
-
-    // 呼叫後端 API 查詢
     const res = await api.getTankMaintenance(id);
-
     if (res.status === 'success' && res.tank) {
-      // 自動帶入資料
       setFormData(prev => ({
         ...prev,
-        content: res.tank.content || prev.content, // 如果歷史有就帶入，沒有就維持現狀
+        content: res.tank.content || prev.content,
         totalWeight: res.tank.lastTotal ? String(res.tank.lastTotal) : prev.totalWeight,
         headWeight: res.tank.lastHead ? String(res.tank.lastHead) : prev.headWeight,
         emptyWeight: res.tank.empty ? String(res.tank.empty) : prev.emptyWeight,
-        // 如果需要，也可以帶入上次的備註
-        // remark: res.tank.lastRemark || prev.remark 
       }));
     }
     setLoading(false);
@@ -81,40 +81,38 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     }
 
     setLoading(true);
-    // 尋找對應的 Zone ID (如果後端需要 ID)
     const selectedZone = zones.find(z => z.name === formData.zone) || zones[0];
-    const zoneId = selectedZone ? selectedZone.id : 'Z-01'; // 預防萬一
+    const zoneId = selectedZone ? selectedZone.id : 'Z-01';
 
     const payload = {
       id: formData.tankId.toUpperCase(),
       content: formData.content,
-      zone: zoneId,           // 傳送代號 (Z-01)
-      zoneName: formData.zone, // 傳送中文名稱 (本廠) 寫入 Log 用
+      zone: zoneId,
+      zoneName: formData.zone,
       netWeight: formData.netWeight,
       totalWeight: formData.totalWeight,
       headWeight: formData.headWeight,
       emptyWeight: formData.emptyWeight,
       remark: formData.remark,
       user: user,
-      customTime: formData.customTime || undefined
+      customTime: formData.customTime // 傳送畫面上顯示的時間
     };
 
     const res = await api.gateIn(payload);
 
     if (res.status === 'success') {
       setMessage({ text: '進場作業成功！', type: 'success' });
-      // 清空表單，保留區域
+      // 重置表單，但時間要重新抓取現在時間
       setFormData({
         tankId: '', content: '', zone: formData.zone, netWeight: 0,
-        totalWeight: '', headWeight: '', emptyWeight: '', remark: '', customTime: ''
+        totalWeight: '', headWeight: '', emptyWeight: '', remark: '',
+        customTime: getCurrentTime() // 🟢 重置後時間也要更新
       });
-      onRefresh(); // 通知上層更新列表
+      onRefresh();
     } else {
       setMessage({ text: res.message || '作業失敗', type: 'error' });
     }
     setLoading(false);
-
-    // 3秒後消除訊息
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);
   };
 
@@ -129,16 +127,29 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* 🟢 進場時間 (移到最上面) */}
+        <div>
+          <label className="block text-sm font-bold text-gray-700">進場時間 (Time)</label>
+          <input
+            type="datetime-local"
+            className="w-full p-2 border border-gray-300 rounded mt-1 font-mono text-gray-600"
+            value={formData.customTime}
+            onChange={e => setFormData({ ...formData, customTime: e.target.value })}
+            required
+          />
+        </div>
+
         {/* 車號 */}
         <div>
           <label className="block text-sm font-bold text-gray-700">車號 (Tank ID)</label>
           <input
             type="text"
-            className="w-full p-2 border border-gray-300 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full p-2 border border-gray-300 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
             placeholder="例如: TNKU1234567"
             value={formData.tankId}
             onChange={e => setFormData({ ...formData, tankId: e.target.value.toUpperCase() })}
-            onBlur={handleTankBlur} // 🟢 這裡觸發自動帶入
+            onBlur={handleTankBlur}
             required
           />
         </div>
@@ -168,7 +179,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
           </select>
         </div>
 
-        {/* 重量區塊：總重 / 車頭 / 空櫃 */}
+        {/* 重量區塊 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-gray-700">總重 (Total)</label>
@@ -188,7 +199,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             value={formData.emptyWeight} onChange={e => setFormData({ ...formData, emptyWeight: e.target.value })} />
         </div>
 
-        {/* 自動計算的淨重 */}
+        {/* 淨重 */}
         <div className="bg-blue-50 p-3 rounded text-center">
           <span className="text-gray-600 font-bold">淨重 (Net Weight): </span>
           <span className="text-2xl font-bold text-blue-600">{formData.netWeight}</span>
@@ -202,17 +213,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             className="w-full p-2 border border-gray-300 rounded mt-1"
             value={formData.remark}
             onChange={e => setFormData({ ...formData, remark: e.target.value })}
-          />
-        </div>
-
-        {/* 自訂時間 (選填) */}
-        <div>
-          <label className="block text-sm text-gray-500">補登時間 (選填)</label>
-          <input
-            type="datetime-local"
-            className="w-full p-2 border border-gray-300 rounded mt-1 text-gray-500 text-sm"
-            value={formData.customTime}
-            onChange={e => setFormData({ ...formData, customTime: e.target.value })}
           />
         </div>
 
