@@ -4,17 +4,54 @@
 
 # Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+This project is a React application set up with Vite and TypeScript. It includes a pre-configured GitHub Action for deploying to GitHub Pages.
 
-View your app in AI Studio: https://ai.studio/apps/drive/14joDFNPgYpfI5PETx5y3CX-qg3EqLToI
+## 🚀 Quick Start
 
-## Run Locally
+### Prerequisites
+- **Node.js** (v18 or higher recommended)
+- **npm** (comes with Node.js)
 
-**Prerequisites:**  Node.js
+### Local Development
 
+1.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+2.  **Configure Environment:**
+    - Rename `.env.example` to `.env` (if it exists) or create a `.env` file.
+    - Set your API keys (e.g., `GEMINI_API_KEY`).
+
+3.  **Start the development server:**
+    ```bash
+    npm run dev
+    ```
+    Open your browser and navigate to the URL shown in the terminal (usually `http://localhost:3000` or `http://localhost:5173`).
+
+## 📦 Deployment
+
+This repository is configured to automatically deploy to **GitHub Pages** whenever you push to the `main` branch.
+
+### Setup GitHub Pages
+1. Go to your repository **Settings**.
+2. Navigate to **Pages** (under "Code and automation").
+3. Under **Build and deployment** > **Source**, select **GitHub Actions**.
+4. The deployment will trigger automatically on your next push to `main`.
+
+### Manual Build
+To build the project locally (outputs to `dist/`):
+```bash
+npm run build
+```
+To preview the production build locally:
+```bash
+npm run preview
+```
+
+## 🛠 Project Structure
+
+- `src/` - Application source code
+- `.github/workflows/` - CI/CD configuration
+- `vite.config.ts` - Vite configuration
+
