@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tank, Zone, RegistryItem, LogEntry } from '../types';
+import { api } from '../services/api';
 
 interface EntryProps {
   zones: Zone[];
@@ -36,60 +37,43 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin
     const cleanVal = val.toUpperCase().trim();
     setFormData((prev) => ({ ...prev, tankId: cleanVal }));
 
-    if (cleanVal.length < 3) {
+    // Clear data if cleared
+    if (cleanVal.length === 0) {
       setFormData((prev) => ({ ...prev, empty: '', content: '', total: '', head: '', remark: '' }));
       setAutoMsg(null);
-      return;
     }
+  };
 
+  const handleTankBlur = async () => {
+    const cleanVal = formData.tankId.trim();
+    if (!cleanVal) return;
+
+    // 1. Check local inventory for warning (Always Check)
     const inStock = inventory.find((t) => t.id === cleanVal);
     let msg: { type: 'error' | 'success' | 'info'; text: string } | null = null;
-    let newContent = '';
-    let newEmpty = '';
-    let newRemark = '';
-    let newTotal = '';
-    let newHead = '';
 
     if (inStock) {
       const zName = zones.find((z) => z.id === inStock.zone)?.name || inStock.zone;
       msg = { type: 'error', text: `目前位於：${zName}` };
-      newContent = inStock.content;
-      newRemark = inStock.remark || '';
     }
 
-    const reg = registry.find((r) => r.id === cleanVal);
-    if (reg) {
-      newEmpty = reg.empty.toString();
-      if (!newContent) newContent = reg.content;
-      if (!msg) msg = { type: 'success', text: '找到歷史資料' };
-    }
+    // 2. Call API for history data
+    try {
+      const res = await api.getTankMaintenance(cleanVal);
+      if (res.status === 'success' && res.tank) {
+        setFormData(prev => ({
+          ...prev,
+          content: res.tank.content || prev.content,
+          total: res.tank.lastTotal ? String(res.tank.lastTotal) : prev.total,
+          head: res.tank.lastHead ? String(res.tank.lastHead) : prev.head,
+          empty: res.tank.empty ? String(res.tank.empty) : prev.empty,
+        }));
 
-    // Find last log for defaults if not in stock
-    if (!inStock) {
-      // Search in logs (sort by time desc first to be safe)
-      const sortedLogs = [...logs].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-
-      // Find latest non-empty values independently
-      const lastTotalLog = sortedLogs.find(l => l.tank === cleanVal && l.total && Number(l.total) > 0);
-      const lastHeadLog = sortedLogs.find(l => l.tank === cleanVal && l.head && Number(l.head) > 0);
-      const lastEmptyLog = sortedLogs.find(l => l.tank === cleanVal && l.empty && Number(l.empty) > 0);
-
-      if (lastTotalLog || lastHeadLog || lastEmptyLog) {
-        newTotal = lastTotalLog?.total?.toString() || '';
-        newHead = lastHeadLog?.head?.toString() || '';
-        newEmpty = lastEmptyLog?.empty?.toString() || '';
         if (!msg) msg = { type: 'success', text: '找到歷史資料' };
       }
+    } catch (e) {
+      console.error(e);
     }
-
-    setFormData((prev) => ({
-      ...prev,
-      content: prev.content || newContent,
-      empty: prev.empty || newEmpty,
-      remark: prev.remark || newRemark,
-      total: prev.total || newTotal,
-      head: prev.head || newHead,
-    }));
 
     setAutoMsg(inStock ? { ...msg!, text: msg!.text + ' (自動填入)' } : (msg || { type: 'info', text: '新槽車 (無紀錄)' }));
   };
@@ -158,6 +142,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin
             className={`w-full border-2 border-slate-200 p-3 rounded-lg uppercase focus:border-amber-500 outline-none transition text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
             placeholder="例如: TNKU1234567"
             disabled={!isAdmin}
+            onBlur={handleTankBlur}
             required
           />
           <div className="h-5 mt-1 text-sm font-bold flex items-center">
