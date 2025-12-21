@@ -5,22 +5,23 @@ import { InventoryItem, Zone } from '../types';
 interface EntryProps {
   zones: Zone[];
   inventory: InventoryItem[];
-  onRefresh: () => void;
+  logs: any[];      // 為了相容 App.tsx 傳入的 props
+  registry: any[];  // 為了相容 App.tsx 傳入的 props
+  onEntry: (data: any) => Promise<void>; // 為了相容 App.tsx
+  isAdmin: boolean;
   user: string;
 }
 
-const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
+const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
 
-  // 🟢 設定每個區域的停車格數量 (您可以依需求自由修改)
+  // 設定每個區域的停車格數量
   const getZoneCapacity = (zoneName: string) => {
-    // 如果區域名稱包含 "Z-1" 或 "A區" 等等，回傳對應格數
-    if (zoneName === 'Z-1') return 35;
-    if (zoneName === 'Z-2') return 40;
-    // 預設其他區域都給 20 格，您可自行調整
+    if (zoneName === 'Z-1' || zoneName.includes('A區')) return 35;
+    if (zoneName === 'Z-2' || zoneName.includes('B區')) return 40;
     return 20;
   };
 
-  // 產生停車格代號列表 (例如: Z-1-1 ~ Z-1-35)
+  // 產生停車格代號列表
   const generateSlots = (zoneName: string) => {
     if (!zoneName) return [];
     const count = getZoneCapacity(zoneName);
@@ -38,7 +39,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     tankId: '',
     content: '',
     zone: '',
-    slot: '', // 🟢 新增停車格欄位
+    slot: '',
     netWeight: 0,
     totalWeight: '',
     headWeight: '',
@@ -48,13 +49,14 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
 
   const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false); // 🟢 新增：搜尋狀態
   const formRef = useRef<HTMLDivElement>(null);
 
-  // 當 zones 載入時，預設選第一個，並連動設定預設停車格
+  // 初始化區域
   useEffect(() => {
     if (zones.length > 0 && !formData.zone) {
       const firstZone = zones[0].name;
-      const firstSlot = `${firstZone}-1`; // 預設選第一格
+      const firstSlot = `${firstZone}-1`;
       setFormData(prev => ({
         ...prev,
         zone: firstZone,
@@ -63,17 +65,16 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     }
   }, [zones]);
 
-  // 🟢 當區域 (zone) 改變時，自動重設 停車格 (slot) 為該區的第一格
+  // 當區域改變時，重設停車格
   useEffect(() => {
     if (formData.zone) {
-      // 檢查目前的 slot 是否符合現在的 zone (例如從 Z-1 切到 Z-2，原本的 Z-1-5 就不合法了)
       if (!formData.slot.startsWith(formData.zone)) {
         setFormData(prev => ({ ...prev, slot: `${prev.zone}-1` }));
       }
     }
   }, [formData.zone]);
 
-  // 計算淨重
+  // 自動計算淨重
   useEffect(() => {
     const total = parseFloat(formData.totalWeight) || 0;
     const head = parseFloat(formData.headWeight) || 0;
@@ -87,23 +88,44 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     }
   }, [formData.totalWeight, formData.headWeight, formData.emptyWeight]);
 
-  const handleTankBlur = async () => {
+  // 🟢 核心修改：使用 useEffect 監聽 tankId 變動，實現自動搜尋 (Debounce)
+  useEffect(() => {
     const id = formData.tankId.trim().toUpperCase();
-    if (!id) return;
-    setLoading(true);
-    // 使用 as any 避開型別檢查
-    const res = await api.getTankMaintenance(id) as any;
-    if (res.status === 'success' && res.tank) {
-      setFormData(prev => ({
-        ...prev,
-        content: res.tank.content || prev.content,
-        totalWeight: res.tank.lastTotal ? String(res.tank.lastTotal) : prev.totalWeight,
-        headWeight: res.tank.lastHead ? String(res.tank.lastHead) : prev.headWeight,
-        emptyWeight: res.tank.empty ? String(res.tank.empty) : prev.emptyWeight,
-      }));
-    }
-    setLoading(false);
-  };
+
+    // 如果字數太少(小於3碼)，不進行搜尋，避免誤判
+    if (id.length < 3) return;
+
+    // 設定一個計時器，500毫秒後執行搜尋
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        // 使用 as any 避開型別檢查
+        const res = await api.getTankMaintenance(id) as any;
+
+        // 只有當回傳成功，且目前輸入框的 ID 還是等於搜尋的 ID 時才更新 (避免快速打字導致的 race condition)
+        if (res.status === 'success' && res.tank) {
+          setFormData(prev => ({
+            ...prev,
+            content: res.tank.content || prev.content,
+            // 如果 API 有回傳上次的重量資料，自動帶入，否則保留目前輸入
+            totalWeight: res.tank.lastTotal ? String(res.tank.lastTotal) : prev.totalWeight,
+            headWeight: res.tank.lastHead ? String(res.tank.lastHead) : prev.headWeight,
+            emptyWeight: res.tank.empty ? String(res.tank.empty) : prev.emptyWeight,
+          }));
+        }
+      } catch (error) {
+        console.error("Auto search failed", error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500); // 延遲 0.5 秒
+
+    // 清除函式：如果使用者在 0.5 秒內又打字，會取消上一次的搜尋，重新計時
+    return () => clearTimeout(timer);
+
+  }, [formData.tankId]); // 監聽 tankId
+
+  // 原本的 handleTankBlur 已經不需要了，因為上面已經取代了它的功能
 
   const handleSubmit = async () => {
     if (!formData.tankId) {
@@ -120,7 +142,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       content: formData.content,
       zone: zoneId,
       zoneName: formData.zone,
-      slot: formData.slot, // 🟢 傳送停車格資料
+      slot: formData.slot,
       netWeight: formData.netWeight,
       totalWeight: formData.totalWeight,
       headWeight: formData.headWeight,
@@ -130,33 +152,55 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       customTime: formData.customTime
     };
 
-    const res = await api.gateIn(payload);
-
-    if (res.status === 'success') {
+    // 呼叫 App.tsx 傳進來的 onEntry，或是直接呼叫 api (看您的架構，這裡維持您原本的邏輯)
+    // 為了保險，這裡直接使用 api 呼叫，或者使用 props.onEntry
+    // 如果 App.tsx 有傳 onEntry，我們優先用它，不然用 api
+    if (onEntry) {
+      await onEntry(payload);
+      // 重置表單 (onEntry 通常不回傳狀態，所以我們手動重置)
       setMessage({ text: `進場成功！位置：${formData.slot}`, type: 'success' });
-
       setFormData({
         customTime: getCurrentTime(),
         tankId: '',
         content: '',
         zone: formData.zone,
-        slot: formData.slot, // 保留當前選擇的位置，或依需求改成自動跳下一格
+        slot: formData.slot,
         netWeight: 0,
         totalWeight: '',
         headWeight: '',
         emptyWeight: '',
         remark: '',
       });
-      onRefresh();
-
       setTimeout(() => {
         const tankInput = formRef.current?.querySelector('input[name="tankId"]') as HTMLElement;
         tankInput?.focus();
       }, 100);
-
     } else {
-      setMessage({ text: res.message || '作業失敗', type: 'error' });
+      // Fallback: 如果沒有傳 onEntry prop (單獨測試時)
+      const res = await api.gateIn(payload);
+      if (res.status === 'success') {
+        setMessage({ text: `進場成功！位置：${formData.slot}`, type: 'success' });
+        setFormData({
+          customTime: getCurrentTime(),
+          tankId: '',
+          content: '',
+          zone: formData.zone,
+          slot: formData.slot,
+          netWeight: 0,
+          totalWeight: '',
+          headWeight: '',
+          emptyWeight: '',
+          remark: '',
+        });
+        setTimeout(() => {
+          const tankInput = formRef.current?.querySelector('input[name="tankId"]') as HTMLElement;
+          tankInput?.focus();
+        }, 100);
+      } else {
+        setMessage({ text: res.message || '作業失敗', type: 'error' });
+      }
     }
+
     setLoading(false);
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);
   };
@@ -189,7 +233,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     }
   };
 
-  // 取得目前選中區域的所有停車格選項
   const currentSlots = generateSlots(formData.zone);
 
   return (
@@ -218,32 +261,41 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
           />
         </div>
 
-        <div>
+        <div className="relative">
           <label className="block text-sm font-bold text-gray-700">
             車號 (Tank ID) <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            name="tankId"
-            className="w-full p-2 border border-gray-300 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
-            placeholder="例如: TNKU1234567"
-            value={formData.tankId}
-            onChange={e => setFormData({ ...formData, tankId: e.target.value.toUpperCase() })}
-            onBlur={handleTankBlur}
-          />
+          <div className="relative">
+            <input
+              type="text"
+              name="tankId"
+              className="w-full p-2 border border-gray-300 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none uppercase pr-10"
+              placeholder="例如: TNKU1234567"
+              value={formData.tankId}
+              // 🟢 這裡移除了 onBlur，改由 useEffect 處理
+              onChange={e => setFormData({ ...formData, tankId: e.target.value.toUpperCase() })}
+            />
+            {/* 🟢 顯示搜尋中的小動畫 */}
+            {isSearching && (
+              <div className="absolute right-3 top-3 text-gray-400 animate-pulse">
+                <i className="fa-solid fa-spinner fa-spin"></i>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
           <label className="block text-sm font-bold text-gray-700">內容物 (Content)</label>
           <input
             type="text"
-            className="w-full p-2 border border-gray-300 rounded mt-1"
+            className="w-full p-2 border border-gray-300 rounded mt-1 transition-colors duration-300"
+            // 當內容物被自動帶入時，給一點視覺回饋 (可選)
+            style={{ backgroundColor: formData.content ? '#f0f9ff' : 'white' }}
             value={formData.content}
             onChange={e => setFormData({ ...formData, content: e.target.value })}
           />
         </div>
 
-        {/* 區域與停車格 並排顯示 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-gray-700">區域 (Zone)</label>
@@ -258,7 +310,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             </select>
           </div>
 
-          {/* 🟢 新增：停車格選擇 */}
           <div>
             <label className="block text-sm font-bold text-gray-700">停車格 (Slot)</label>
             <select
