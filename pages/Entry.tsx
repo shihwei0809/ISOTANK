@@ -66,12 +66,18 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin
 
     // Find last log for defaults if not in stock
     if (!inStock) {
-      // Search in logs (already sorted newest first from API)
-      const recentLog = logs.find(l => l.tank === cleanVal);
-      if (recentLog) {
-        newTotal = recentLog.total?.toString() || '';
-        newHead = recentLog.head?.toString() || '';
-        newEmpty = recentLog.empty?.toString() || '';
+      // Search in logs (sort by time desc first to be safe)
+      const sortedLogs = [...logs].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+      // Find latest non-empty values independently
+      const lastTotalLog = sortedLogs.find(l => l.tank === cleanVal && l.total && Number(l.total) > 0);
+      const lastHeadLog = sortedLogs.find(l => l.tank === cleanVal && l.head && Number(l.head) > 0);
+      const lastEmptyLog = sortedLogs.find(l => l.tank === cleanVal && l.empty && Number(l.empty) > 0);
+
+      if (lastTotalLog || lastHeadLog || lastEmptyLog) {
+        newTotal = lastTotalLog?.total?.toString() || '';
+        newHead = lastHeadLog?.head?.toString() || '';
+        newEmpty = lastEmptyLog?.empty?.toString() || '';
         if (!msg) msg = { type: 'success', text: '找到歷史資料' };
       }
     }

@@ -147,10 +147,13 @@ export const api = {
 
     if (!tankLogs) return { status: 'success', tank: { id }, history: [] };
 
+    // Ensure sorted by time descending
+    tankLogs.sort((a: any, b: any) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
     const lastNet = tankLogs.find((l: any) => ['進場', '移區', '更新'].includes(l.action))?.weight || '無';
     const lastTotal = tankLogs.find((l: any) => l.total)?.total || 0;
     const lastHead = tankLogs.find((l: any) => l.head)?.head || 0;
-    // Fallback to history if not in registry
+    // Fallback to history if not in registry (find first non-empty value)
     const lastEmpty = tankLogs.find((l: any) => l.empty)?.empty || '';
 
     const tank = {

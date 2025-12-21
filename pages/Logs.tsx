@@ -8,8 +8,10 @@ interface LogsProps {
 const Logs: React.FC<LogsProps> = ({ logs }) => {
   const [search, setSearch] = useState('');
 
-  // No need to reverse, API returns newest first
-  const displayLogs = logs.filter(l =>
+  // Sort by time descending (parse the string date)
+  const displayLogs = logs.slice().sort((a, b) => {
+    return new Date(b.time).getTime() - new Date(a.time).getTime();
+  }).filter(l =>
     search === '' ||
     `${l.time} ${l.tank} ${l.action} ${l.zone} ${l.content} ${l.user} ${l.remark}`.toUpperCase().includes(search.toUpperCase())
   );
@@ -52,9 +54,9 @@ const Logs: React.FC<LogsProps> = ({ logs }) => {
                     <td className="p-4 font-bold font-mono text-slate-700">{l.tank}</td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded text-xs font-bold ${l.action === '進場' ? 'bg-green-100 text-green-700' :
-                          l.action === '出場' ? 'bg-red-100 text-red-700' :
-                            l.action === '移區' ? 'bg-purple-100 text-purple-700' :
-                              'bg-blue-100 text-blue-700'
+                        l.action === '出場' ? 'bg-red-100 text-red-700' :
+                          l.action === '移區' ? 'bg-purple-100 text-purple-700' :
+                            'bg-blue-100 text-blue-700'
                         }`}>
                         {l.action}
                       </span>
