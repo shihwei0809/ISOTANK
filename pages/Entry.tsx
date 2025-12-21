@@ -127,7 +127,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
       } finally {
         setIsSearching(false);
       }
-    }, 500);
+    }, 100);
 
     return () => clearTimeout(timer);
 
