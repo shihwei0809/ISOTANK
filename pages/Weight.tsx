@@ -83,13 +83,14 @@ const Weight: React.FC<WeightProps> = ({ isAdmin, user, zones, refreshData }) =>
     }
   };
 
-  // 🟢 修正：計算淨重邏輯 (解決浮點數誤差)
+  // 🟢 修正：計算淨重邏輯
   const calculateNet = () => {
     const t = parseFloat(editForm.total) || 0;
     const h = parseFloat(editForm.head) || 0;
     const e = parseFloat(editForm.empty) || 0;
     const rawNet = t - h - e;
-    return Math.max(0, Number(rawNet.toFixed(2)));
+    // 強制取2位小數
+    return Math.max(0, parseFloat(rawNet.toFixed(2)));
   };
 
   const net = calculateNet();
@@ -153,7 +154,7 @@ const Weight: React.FC<WeightProps> = ({ isAdmin, user, zones, refreshData }) =>
                   <label className="text-xs font-bold text-blue-600 block mb-1">空櫃重 (Empty)</label>
                   <input
                     type="number"
-                    step={10} // 🟢 設定步進值為 10
+                    step={10}
                     value={editForm.empty}
                     onChange={(e) => setEditForm({ ...editForm, empty: e.target.value })}
                     className={`w-full p-2 rounded border border-blue-200 text-black ${!isAdmin ? 'bg-gray-100' : 'bg-white'}`}
@@ -191,7 +192,7 @@ const Weight: React.FC<WeightProps> = ({ isAdmin, user, zones, refreshData }) =>
                     <div className="text-[10px] text-slate-400 mb-1">總重 (Total)</div>
                     <input
                       type="number"
-                      step={10} // 🟢 設定步進值為 10
+                      step={10}
                       value={editForm.total}
                       onChange={(e) => setEditForm({ ...editForm, total: e.target.value })}
                       className="w-full text-center font-bold text-lg text-black outline-none border-b border-transparent focus:border-blue-500 bg-transparent"
@@ -203,7 +204,7 @@ const Weight: React.FC<WeightProps> = ({ isAdmin, user, zones, refreshData }) =>
                     <div className="text-[10px] text-slate-400 mb-1">車頭 (Head)</div>
                     <input
                       type="number"
-                      step={10} // 🟢 設定步進值為 10
+                      step={10}
                       value={editForm.head}
                       onChange={(e) => setEditForm({ ...editForm, head: e.target.value })}
                       className="w-full text-center font-bold text-lg text-black outline-none border-b border-transparent focus:border-blue-500 bg-transparent"

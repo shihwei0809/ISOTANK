@@ -72,16 +72,16 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
     }
   }, [formData.zone]);
 
-  // 🟢 修正：計算淨重 (解決浮點數誤差)
+  // 🟢 修正：計算淨重 (強制取2位小數)
   useEffect(() => {
     const total = parseFloat(formData.totalWeight) || 0;
     const head = parseFloat(formData.headWeight) || 0;
     const empty = parseFloat(formData.emptyWeight) || 0;
 
     if (total > 0 && head > 0 && empty > 0) {
-      // 先減完，再用 toFixed(2) 取兩位小數，最後轉回數字去除多餘的 0
       const rawNet = total - head - empty;
-      const net = Math.max(0, Number(rawNet.toFixed(2)));
+      // 使用 parseFloat(x.toFixed(2)) 確保數字乾淨
+      const net = Math.max(0, parseFloat(rawNet.toFixed(2)));
       setFormData(prev => ({ ...prev, netWeight: net }));
     } else {
       setFormData(prev => ({ ...prev, netWeight: 0 }));
@@ -101,6 +101,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
       setTankLocation('');
 
       try {
+        // 使用 as any 避開型別檢查
         const res = await api.getTankMaintenance(id) as any;
 
         if (res.status === 'success' && res.tank) {
@@ -316,13 +317,13 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
           </div>
         </div>
 
-        {/* 🟢 修正：重量輸入框加入 step={10} */}
+        {/* 🟢 step=10 設定 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-gray-700">總重 (Total)</label>
             <input
               type="number"
-              step={10} // 設定步進值為 10
+              step={10}
               className="w-full p-2 border rounded mt-1"
               value={formData.totalWeight}
               onChange={e => setFormData({ ...formData, totalWeight: e.target.value })}
@@ -332,7 +333,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
             <label className="block text-sm font-bold text-gray-700">車頭重 (Head)</label>
             <input
               type="number"
-              step={10} // 設定步進值為 10
+              step={10}
               className="w-full p-2 border rounded mt-1"
               value={formData.headWeight}
               onChange={e => setFormData({ ...formData, headWeight: e.target.value })}
@@ -344,7 +345,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
           <label className="block text-sm font-bold text-gray-700">空櫃重 (Empty)</label>
           <input
             type="number"
-            step={10} // 設定步進值為 10
+            step={10}
             className="w-full p-2 border rounded mt-1"
             value={formData.emptyWeight}
             onChange={e => setFormData({ ...formData, emptyWeight: e.target.value })}
@@ -353,7 +354,10 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
 
         <div className="bg-blue-50 p-3 rounded text-center">
           <span className="text-gray-600 font-bold">淨重 (Net Weight): </span>
-          <span className="text-2xl font-bold text-blue-600">{formData.netWeight.toLocaleString()}</span>
+          {/* 🟢 雙重保險：顯示時再次格式化，絕對不顯示長小數 */}
+          <span className="text-2xl font-bold text-blue-600">
+            {Number(formData.netWeight).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </span>
         </div>
 
         <div>
