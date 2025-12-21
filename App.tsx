@@ -179,7 +179,7 @@ const App: React.FC = () => {
 
         <div className="p-4 md:p-8 w-full max-w-[1600px] mx-auto pb-24 flex-1">
           {page === 'dashboard' && <Dashboard zones={data.zones} inventory={data.inventory} isAdmin={role === 'admin'} onMoveOut={handleMoveOut} />}
-          {page === 'entry' && <Entry zones={data.zones} inventory={data.inventory} onRefresh={fetchData} user={currentUser} />}
+          {page === 'entry' && <Entry zones={data.zones} inventory={data.inventory} logs={data.logs} registry={data.registry} onEntry={handleEntry} isAdmin={role === 'admin'} user={currentUser} />}
 
           {/* 🟢 3. 修正 Weight 元件呼叫：補上 zones 屬性 */}
           {page === 'weight' && <Weight isAdmin={role === 'admin'} user={currentUser} zones={data.zones} refreshData={fetchData} />}
