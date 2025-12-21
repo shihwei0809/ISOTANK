@@ -149,6 +149,8 @@ export const api = {
         lastNet: latestLog?.weight || 0,
         lastTotal: lastTotal,
         lastHead: lastHead,
+        zoneName: latestLog?.zone || '',
+        slot: latestLog?.slot || ''
       };
 
       const history = (tankLogs || []).map((l: any) => ({
@@ -165,7 +167,9 @@ export const api = {
           content: '',
           lastNet: 0,
           lastTotal: '',
-          lastHead: ''
+          lastHead: '',
+          zoneName: '',
+          slot: ''
         },
         history: []
       };
