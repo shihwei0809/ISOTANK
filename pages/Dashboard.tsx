@@ -93,9 +93,9 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
           placeholder="搜尋槽號、內容物..."
         />
       </div>
-      <div className="text-blue-600 text-sm font-bold mt-1">
-        📍 車位: {item.slot}
-      </div>
+
+      {/* 🔴 已移除：原本這裡有一段錯誤的 item.slot 程式碼 */}
+
       {/* Zones Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {zones.map((zone) => {
@@ -136,6 +136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
                     >
                       <div className="flex-1">
                         <div className="font-bold font-mono text-slate-700 text-base">{tank.id}</div>
+                        {/* 🟢 這裡才是正確顯示 Slot 的位置 */}
                         {tank.slot && (
                           <div className="text-xs text-blue-600 font-bold">
                             📍 {tank.slot}
