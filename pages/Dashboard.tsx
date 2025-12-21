@@ -53,47 +53,49 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
           <div className="text-slate-400 text-xs font-bold uppercase">在庫數 (In Stock)</div>
           <div className="text-3xl font-bold text-amber-600">{currentCount}</div>
         </div>
-        
+
         {/* Simple Pie Chart Visualization */}
         <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 col-span-1 md:col-span-2 flex items-center justify-center h-32 md:h-auto">
-             {chartData.length > 0 ? (
-                 <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie
-                            data={chartData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={30}
-                            outerRadius={50}
-                            paddingAngle={5}
-                            dataKey="value"
-                        >
-                            {chartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Pie>
-                        <RechartsTooltip />
-                        <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{fontSize: '10px'}} />
-                    </PieChart>
-                 </ResponsiveContainer>
-             ) : (
-                 <div className="text-xs text-slate-400">無資料</div>
-             )}
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={30}
+                  outerRadius={50}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip />
+                <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '10px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-xs text-slate-400">無資料</div>
+          )}
         </div>
       </div>
 
-       {/* Search Bar */}
-       <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 flex items-center px-4">
-          <i className="fa-solid fa-search text-slate-300 mr-3"></i>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full outline-none bg-transparent"
-            placeholder="搜尋槽號、內容物..."
-          />
-        </div>
-
+      {/* Search Bar */}
+      <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 flex items-center px-4">
+        <i className="fa-solid fa-search text-slate-300 mr-3"></i>
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full outline-none bg-transparent"
+          placeholder="搜尋槽號、內容物..."
+        />
+      </div>
+      <div className="text-blue-600 text-sm font-bold mt-1">
+        📍 車位: {item.slot}
+      </div>
       {/* Zones Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {zones.map((zone) => {
@@ -116,7 +118,7 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
                   {count}/{limit}
                 </span>
               </div>
-              
+
               <div className="h-1 w-full bg-slate-200 shrink-0">
                 <div className={`h-full ${colorClass} transition-all duration-500`} style={{ width: `${Math.min(pct, 100)}%` }}></div>
               </div>
@@ -134,6 +136,11 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
                     >
                       <div className="flex-1">
                         <div className="font-bold font-mono text-slate-700 text-base">{tank.id}</div>
+                        {tank.slot && (
+                          <div className="text-xs text-blue-600 font-bold">
+                            📍 {tank.slot}
+                          </div>
+                        )}
                         <div className="text-[11px] text-slate-400 my-0.5">
                           <i className="fa-regular fa-clock mr-1"></i>
                           {tank.time}
@@ -178,9 +185,9 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
         tanks={selectedZoneTanks}
         isAdmin={isAdmin}
         onMoveOut={(id, zoneName) => {
-           if(window.confirm(`確定將 ${id} 移出 ${zoneName}？`)) {
-               onMoveOut(id, zoneName);
-           }
+          if (window.confirm(`確定將 ${id} 移出 ${zoneName}？`)) {
+            onMoveOut(id, zoneName);
+          }
         }}
       />
     </div>

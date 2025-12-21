@@ -10,23 +10,35 @@ interface EntryProps {
 }
 
 const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
-  // 1. 取得現在時間 (格式: YYYY-MM-DDTHH:mm) 供 datetime-local 使用
-  const getCurrentTime = () => {
-    const now = new Date();
-    // 台灣時區是 UTC+8，getTimezoneOffset 會回傳 -480 (分鐘)
-    // 我們要補回時差來轉成當地的 ISO String
-    const offset = now.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
-    return localISOTime;
+
+  // 🟢 設定每個區域的停車格數量 (您可以依需求自由修改)
+  const getZoneCapacity = (zoneName: string) => {
+    // 如果區域名稱包含 "Z-1" 或 "A區" 等等，回傳對應格數
+    if (zoneName === 'Z-1') return 35;
+    if (zoneName === 'Z-2') return 40;
+    // 預設其他區域都給 20 格，您可自行調整
+    return 20;
   };
 
-  // 2. 表單狀態初始化
+  // 產生停車格代號列表 (例如: Z-1-1 ~ Z-1-35)
+  const generateSlots = (zoneName: string) => {
+    if (!zoneName) return [];
+    const count = getZoneCapacity(zoneName);
+    return Array.from({ length: count }, (_, i) => `${zoneName}-${i + 1}`);
+  };
+
+  const getCurrentTime = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset() * 60000;
+    return (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+  };
+
   const [formData, setFormData] = useState({
-    // 🟢 這邊確保 customTime 一開始就有值
     customTime: getCurrentTime(),
     tankId: '',
     content: '',
     zone: '',
+    slot: '', // 🟢 新增停車格欄位
     netWeight: 0,
     totalWeight: '',
     headWeight: '',
@@ -36,18 +48,32 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
 
   const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
-
-  // 用來參照整個表單容器，方便抓取下一個欄位
   const formRef = useRef<HTMLDivElement>(null);
 
-  // 預設選擇第一個區域
+  // 當 zones 載入時，預設選第一個，並連動設定預設停車格
   useEffect(() => {
     if (zones.length > 0 && !formData.zone) {
-      setFormData(prev => ({ ...prev, zone: zones[0].name }));
+      const firstZone = zones[0].name;
+      const firstSlot = `${firstZone}-1`; // 預設選第一格
+      setFormData(prev => ({
+        ...prev,
+        zone: firstZone,
+        slot: firstSlot
+      }));
     }
   }, [zones]);
 
-  // 自動計算淨重
+  // 🟢 當區域 (zone) 改變時，自動重設 停車格 (slot) 為該區的第一格
+  useEffect(() => {
+    if (formData.zone) {
+      // 檢查目前的 slot 是否符合現在的 zone (例如從 Z-1 切到 Z-2，原本的 Z-1-5 就不合法了)
+      if (!formData.slot.startsWith(formData.zone)) {
+        setFormData(prev => ({ ...prev, slot: `${prev.zone}-1` }));
+      }
+    }
+  }, [formData.zone]);
+
+  // 計算淨重
   useEffect(() => {
     const total = parseFloat(formData.totalWeight) || 0;
     const head = parseFloat(formData.headWeight) || 0;
@@ -61,12 +87,12 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     }
   }, [formData.totalWeight, formData.headWeight, formData.emptyWeight]);
 
-  // 車號輸入完畢抓取歷史資料
   const handleTankBlur = async () => {
     const id = formData.tankId.trim().toUpperCase();
     if (!id) return;
     setLoading(true);
-    const res = await api.getTankMaintenance(id);
+    // 使用 as any 避開型別檢查
+    const res = await api.getTankMaintenance(id) as any;
     if (res.status === 'success' && res.tank) {
       setFormData(prev => ({
         ...prev,
@@ -79,15 +105,9 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     setLoading(false);
   };
 
-  // 🟢 處理送出邏輯 (從 form onSubmit 移出來獨立呼叫)
   const handleSubmit = async () => {
-    // 驗證
     if (!formData.tankId) {
       setMessage({ text: '錯誤：請填寫車號', type: 'error' });
-      return;
-    }
-    if (!formData.customTime) {
-      setMessage({ text: '錯誤：進場時間不可為空', type: 'error' });
       return;
     }
 
@@ -100,6 +120,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       content: formData.content,
       zone: zoneId,
       zoneName: formData.zone,
+      slot: formData.slot, // 🟢 傳送停車格資料
       netWeight: formData.netWeight,
       totalWeight: formData.totalWeight,
       headWeight: formData.headWeight,
@@ -112,14 +133,14 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     const res = await api.gateIn(payload);
 
     if (res.status === 'success') {
-      setMessage({ text: '進場作業成功！', type: 'success' });
+      setMessage({ text: `進場成功！位置：${formData.slot}`, type: 'success' });
 
-      // 重置表單，保留區域，時間更新為最新
       setFormData({
-        customTime: getCurrentTime(), // 更新時間
+        customTime: getCurrentTime(),
         tankId: '',
         content: '',
         zone: formData.zone,
+        slot: formData.slot, // 保留當前選擇的位置，或依需求改成自動跳下一格
         netWeight: 0,
         totalWeight: '',
         headWeight: '',
@@ -128,9 +149,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       });
       onRefresh();
 
-      // 成功後將焦點移回第一個輸入框 (時間之後的車號，或是時間本身)
-      // 這裡示範移回「車號」因為時間通常是自動帶入不需要一直改
-      // 如果希望移回時間欄位，請改找 input[type="datetime-local"]
       setTimeout(() => {
         const tankInput = formRef.current?.querySelector('input[name="tankId"]') as HTMLElement;
         tankInput?.focus();
@@ -143,41 +161,36 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     setTimeout(() => setMessage({ text: '', type: '' }), 3000);
   };
 
-  // 🟢 處理按鍵事件：Enter 跳下一格
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    // 如果正在使用輸入法 (選字中)，不要觸發跳格
     if (e.nativeEvent.isComposing) return;
 
     if (e.key === 'Enter') {
-      e.preventDefault(); // 100% 阻止預設行為
-
+      e.preventDefault();
       const target = e.target as HTMLElement;
 
-      // 取得所有可輸入的欄位 (包含 input, select, button)
-      // 排除 hidden 和 disabled
       const inputs = Array.from(
         formRef.current?.querySelectorAll('input:not([type="hidden"]):not([disabled]), select:not([disabled]), button:not([disabled])') || []
       ) as HTMLElement[];
 
       const index = inputs.indexOf(target);
 
-      // 如果焦點在最後一個按鈕上，則執行送出
       if (index === inputs.length - 1) {
         handleSubmit();
         return;
       }
 
-      // 否則移到下一個欄位
       if (index > -1 && index < inputs.length - 1) {
         const nextInput = inputs[index + 1];
         nextInput.focus();
-        // 如果是文字框，全選內容方便修改 (選擇性功能)
         if (nextInput instanceof HTMLInputElement) {
           nextInput.select();
         }
       }
     }
   };
+
+  // 取得目前選中區域的所有停車格選項
+  const currentSlots = generateSlots(formData.zone);
 
   return (
     <div className="p-4 max-w-lg mx-auto bg-white rounded-lg shadow-md">
@@ -189,10 +202,8 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
         </div>
       )}
 
-      {/* 🟢 改用 div 包覆，不使用 <form> 標籤，徹底避免瀏覽器預設的 Submit 行為 */}
       <div ref={formRef} onKeyDown={handleKeyDown} className="space-y-4">
 
-        {/* 🟢 第一個欄位：進場時間 (移到最上方) */}
         <div>
           <label className="block text-sm font-bold text-gray-700">
             進場時間 (Time) <span className="text-red-500">*</span>
@@ -203,18 +214,17 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             className="w-full p-2 border border-gray-300 rounded mt-1 font-mono text-gray-600 bg-gray-50"
             value={formData.customTime}
             onChange={e => setFormData({ ...formData, customTime: e.target.value })}
-            required // 雖然是必填，但在 div 模式下主要靠 handleSubmit 檢查
+            required
           />
         </div>
 
-        {/* 車號 */}
         <div>
           <label className="block text-sm font-bold text-gray-700">
             車號 (Tank ID) <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
-            name="tankId" // 加入 name 屬性方便定位
+            name="tankId"
             className="w-full p-2 border border-gray-300 rounded mt-1 focus:ring-2 focus:ring-blue-500 outline-none uppercase"
             placeholder="例如: TNKU1234567"
             value={formData.tankId}
@@ -223,7 +233,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
           />
         </div>
 
-        {/* 內容物 */}
         <div>
           <label className="block text-sm font-bold text-gray-700">內容物 (Content)</label>
           <input
@@ -234,21 +243,36 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
           />
         </div>
 
-        {/* 區域選擇 */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700">區域 (Zone)</label>
-          <select
-            className="w-full p-2 border border-gray-300 rounded mt-1"
-            value={formData.zone}
-            onChange={e => setFormData({ ...formData, zone: e.target.value })}
-          >
-            {zones.map(z => (
-              <option key={z.id} value={z.name}>{z.name}</option>
-            ))}
-          </select>
+        {/* 區域與停車格 並排顯示 */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700">區域 (Zone)</label>
+            <select
+              className="w-full p-2 border border-gray-300 rounded mt-1"
+              value={formData.zone}
+              onChange={e => setFormData({ ...formData, zone: e.target.value })}
+            >
+              {zones.map(z => (
+                <option key={z.id} value={z.name}>{z.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 🟢 新增：停車格選擇 */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700">停車格 (Slot)</label>
+            <select
+              className="w-full p-2 border border-gray-300 rounded mt-1 bg-yellow-50"
+              value={formData.slot}
+              onChange={e => setFormData({ ...formData, slot: e.target.value })}
+            >
+              {currentSlots.map(slot => (
+                <option key={slot} value={slot}>{slot}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* 重量區塊 */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-gray-700">總重 (Total)</label>
@@ -268,7 +292,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             value={formData.emptyWeight} onChange={e => setFormData({ ...formData, emptyWeight: e.target.value })} />
         </div>
 
-        {/* 淨重顯示 */}
         <div className="bg-blue-50 p-3 rounded text-center">
           <span className="text-gray-600 font-bold">淨重 (Net Weight): </span>
           <span className="text-2xl font-bold text-blue-600">{formData.netWeight}</span>
@@ -284,7 +307,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
           />
         </div>
 
-        {/* 🟢 按鈕改為 type="button"，只有按下它或 Enter 在它身上時才觸發 onClick */}
         <button
           type="button"
           onClick={handleSubmit}

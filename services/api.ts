@@ -44,7 +44,7 @@ export const api = {
 
   // 3. 進場 / 移區
   gateIn: async (data: any) => {
-    const { id, content, zone, netWeight, remark, user, customTime, totalWeight, headWeight, emptyWeight, zoneName } = data;
+    const { id, content, zone, netWeight, remark, user, customTime, totalWeight, headWeight, emptyWeight, zoneName, slot } = data;
     const timeStr = customTime ? customTime.replace('T', ' ') : new Date().toLocaleString();
 
     try {
@@ -60,7 +60,7 @@ export const api = {
 
       // 更新庫存 (Inventory)
       const { error: invError } = await supabase.from('inventory').upsert({
-        id, content, weight: netWeight, zone, time: timeStr, remark: remark || ''
+        id, content, weight: netWeight, zone, time: timeStr, remark: remark || '', slot
       });
 
       if (invError) throw invError;
@@ -69,7 +69,7 @@ export const api = {
       const logAction = existingTank ? (existingTank.zone === zone ? '更新' : '移區') : '進場';
       await supabase.from('logs').insert({
         time: timeStr, tank: id, action: logAction, zone: zoneName, "user": user || 'Unknown',
-        content, weight: netWeight, total: totalWeight, head: headWeight, empty: emptyWeight, remark
+        content, weight: netWeight, total: totalWeight, head: headWeight, empty: emptyWeight, remark, slot
       });
 
       return { status: 'success', message: `槽車 ${id} 作業成功 (${logAction})` };
@@ -157,7 +157,18 @@ export const api = {
 
       return { status: 'success', tank, history };
     } catch (e) {
-      return { status: 'success', tank: { id }, history: [] };
+      return {
+        status: 'success',
+        tank: {
+          id,
+          empty: '',
+          content: '',
+          lastNet: 0,
+          lastTotal: '',
+          lastHead: ''
+        },
+        history: []
+      };
     }
   }
 };
