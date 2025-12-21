@@ -48,10 +48,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
   const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-
-  // 🟢 1. 新增狀態：用來儲存並顯示「目前位置」的提示訊息
   const [tankLocation, setTankLocation] = useState<string>('');
-
   const formRef = useRef<HTMLDivElement>(null);
 
   // 初始化區域
@@ -75,24 +72,25 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
     }
   }, [formData.zone]);
 
+  // 🟢 修正：計算淨重 (解決浮點數誤差)
   useEffect(() => {
     const total = parseFloat(formData.totalWeight) || 0;
     const head = parseFloat(formData.headWeight) || 0;
     const empty = parseFloat(formData.emptyWeight) || 0;
 
     if (total > 0 && head > 0 && empty > 0) {
-      const net = Math.max(0, total - head - empty);
+      // 先減完，再用 toFixed(2) 取兩位小數，最後轉回數字去除多餘的 0
+      const rawNet = total - head - empty;
+      const net = Math.max(0, Number(rawNet.toFixed(2)));
       setFormData(prev => ({ ...prev, netWeight: net }));
     } else {
       setFormData(prev => ({ ...prev, netWeight: 0 }));
     }
   }, [formData.totalWeight, formData.headWeight, formData.emptyWeight]);
 
-  // 自動搜尋 (含目前位置提示)
+  // 自動搜尋
   useEffect(() => {
     const id = formData.tankId.trim().toUpperCase();
-
-    // 當輸入框清空或長度不足時，清除提示訊息
     if (id.length < 3) {
       setTankLocation('');
       return;
@@ -100,20 +98,15 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
 
     const timer = setTimeout(async () => {
       setIsSearching(true);
-      setTankLocation(''); // 搜尋前先清空舊提示
+      setTankLocation('');
 
       try {
-        // 使用 as any 避開型別檢查
         const res = await api.getTankMaintenance(id) as any;
 
         if (res.status === 'success' && res.tank) {
-
-          // 🟢 2. 判斷是否有區域資料，若有則設定提示訊息
           if (res.tank.zoneName) {
-            // 顯示格式：目前位於: A區 (一般) (已自動帶入資訊)
             setTankLocation(res.tank.zoneName);
           }
-
           setFormData(prev => ({
             ...prev,
             content: res.tank.content || prev.content,
@@ -127,10 +120,9 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
       } finally {
         setIsSearching(false);
       }
-    }, 100);
+    }, 500);
 
     return () => clearTimeout(timer);
-
   }, [formData.tankId]);
 
   const handleSubmit = async () => {
@@ -171,7 +163,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
         emptyWeight: '',
         remark: '',
       });
-      setTankLocation(''); // 送出後清除提示
+      setTankLocation('');
     };
 
     if (onEntry) {
@@ -276,7 +268,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
             )}
           </div>
 
-          {/* 🟢 3. 顯示紅色提示訊息 (類似您提供的截圖效果) */}
           {tankLocation && (
             <div className="mt-1 text-red-600 text-sm font-bold flex items-center animate-fade-in">
               <i className="fa-solid fa-triangle-exclamation mr-1"></i>
@@ -325,28 +316,44 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user }) => {
           </div>
         </div>
 
+        {/* 🟢 修正：重量輸入框加入 step={10} */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold text-gray-700">總重 (Total)</label>
-            <input type="number" step="0.01" className="w-full p-2 border rounded mt-1"
-              value={formData.totalWeight} onChange={e => setFormData({ ...formData, totalWeight: e.target.value })} />
+            <input
+              type="number"
+              step={10} // 設定步進值為 10
+              className="w-full p-2 border rounded mt-1"
+              value={formData.totalWeight}
+              onChange={e => setFormData({ ...formData, totalWeight: e.target.value })}
+            />
           </div>
           <div>
             <label className="block text-sm font-bold text-gray-700">車頭重 (Head)</label>
-            <input type="number" step="0.01" className="w-full p-2 border rounded mt-1"
-              value={formData.headWeight} onChange={e => setFormData({ ...formData, headWeight: e.target.value })} />
+            <input
+              type="number"
+              step={10} // 設定步進值為 10
+              className="w-full p-2 border rounded mt-1"
+              value={formData.headWeight}
+              onChange={e => setFormData({ ...formData, headWeight: e.target.value })}
+            />
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-bold text-gray-700">空櫃重 (Empty)</label>
-          <input type="number" step="0.01" className="w-full p-2 border rounded mt-1"
-            value={formData.emptyWeight} onChange={e => setFormData({ ...formData, emptyWeight: e.target.value })} />
+          <input
+            type="number"
+            step={10} // 設定步進值為 10
+            className="w-full p-2 border rounded mt-1"
+            value={formData.emptyWeight}
+            onChange={e => setFormData({ ...formData, emptyWeight: e.target.value })}
+          />
         </div>
 
         <div className="bg-blue-50 p-3 rounded text-center">
           <span className="text-gray-600 font-bold">淨重 (Net Weight): </span>
-          <span className="text-2xl font-bold text-blue-600">{formData.netWeight}</span>
+          <span className="text-2xl font-bold text-blue-600">{formData.netWeight.toLocaleString()}</span>
         </div>
 
         <div>
