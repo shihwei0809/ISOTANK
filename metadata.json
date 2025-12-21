@@ -1,0 +1,5 @@
+{
+  "name": "Copy of ISO Tank Manager",
+  "description": "ISO Tank 進出管理系統，包含庫存追蹤、重量維護與權限管理。",
+  "requestFramePermissions": []
+}
