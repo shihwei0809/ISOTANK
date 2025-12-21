@@ -22,7 +22,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin
     empty: '',
     remark: '',
   });
-  
+
   const [autoMsg, setAutoMsg] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null);
 
   useEffect(() => {
@@ -66,13 +66,14 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin
 
     // Find last log for defaults if not in stock
     if (!inStock) {
-        // Simple search in logs reversed
-        const recentLog = [...logs].reverse().find(l => l.tank === cleanVal);
-        if(recentLog) {
-            newTotal = recentLog.total?.toString() || '';
-            newHead = recentLog.head?.toString() || '';
-            if(!msg) msg = { type: 'success', text: '找到歷史資料' };
-        }
+      // Search in logs (already sorted newest first from API)
+      const recentLog = logs.find(l => l.tank === cleanVal);
+      if (recentLog) {
+        newTotal = recentLog.total?.toString() || '';
+        newHead = recentLog.head?.toString() || '';
+        newEmpty = recentLog.empty?.toString() || '';
+        if (!msg) msg = { type: 'success', text: '找到歷史資料' };
+      }
     }
 
     setFormData((prev) => ({
@@ -84,7 +85,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin
       head: prev.head || newHead,
     }));
 
-    setAutoMsg(inStock ? { ...msg!, text: msg!.text + ' (自動填入)' } : (msg || {type: 'info', text: '新槽車 (無紀錄)'}));
+    setAutoMsg(inStock ? { ...msg!, text: msg!.text + ' (自動填入)' } : (msg || { type: 'info', text: '新槽車 (無紀錄)' }));
   };
 
   const netWeight = Math.max(0, (parseFloat(formData.total) || 0) - (parseFloat(formData.head) || 0) - (parseFloat(formData.empty) || 0));
@@ -111,13 +112,13 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, logs, registry, isAdmin
 
     // Reset form partially
     setFormData(prev => ({
-        ...prev,
-        tankId: '',
-        content: '',
-        total: '',
-        head: '',
-        empty: '',
-        remark: '',
+      ...prev,
+      tankId: '',
+      content: '',
+      total: '',
+      head: '',
+      empty: '',
+      remark: '',
     }));
     setAutoMsg(null);
   };

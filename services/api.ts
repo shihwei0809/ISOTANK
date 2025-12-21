@@ -150,9 +150,11 @@ export const api = {
     const lastNet = tankLogs.find((l: any) => ['進場', '移區', '更新'].includes(l.action))?.weight || '無';
     const lastTotal = tankLogs.find((l: any) => l.total)?.total || 0;
     const lastHead = tankLogs.find((l: any) => l.head)?.head || 0;
+    // Fallback to history if not in registry
+    const lastEmpty = tankLogs.find((l: any) => l.empty)?.empty || '';
 
     const tank = {
-      id, empty: regItem?.empty || '', content: regItem?.content || '',
+      id, empty: regItem?.empty || lastEmpty, content: regItem?.content || '',
       lastNet, lastTotal, lastHead,
     };
 
