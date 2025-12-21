@@ -8,12 +8,12 @@ interface LogsProps {
 const Logs: React.FC<LogsProps> = ({ logs }) => {
   const [search, setSearch] = useState('');
 
-  // Sort by time descending (parse the string date)
+  // Sort by time descending
   const displayLogs = logs.slice().sort((a, b) => {
     return new Date(b.time).getTime() - new Date(a.time).getTime();
   }).filter(l =>
     search === '' ||
-    `${l.time} ${l.tank} ${l.action} ${l.zone} ${l.content} ${l.user} ${l.remark}`.toUpperCase().includes(search.toUpperCase())
+    `${l.time} ${l.tank} ${l.action} ${l.zone} ${l.slot || ''} ${l.content} ${l.user} ${l.remark}`.toUpperCase().includes(search.toUpperCase())
   );
 
   return (
@@ -25,7 +25,7 @@ const Logs: React.FC<LogsProps> = ({ logs }) => {
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="w-full outline-none bg-transparent"
-          placeholder="搜尋時間、槽號、動作、內容物、備註..."
+          placeholder="搜尋時間、槽號、動作、內容物、儲位..."
         />
       </div>
 
@@ -39,6 +39,8 @@ const Logs: React.FC<LogsProps> = ({ logs }) => {
                 <th className="p-4">動作</th>
                 <th className="p-4">內容物</th>
                 <th className="p-4">區域</th>
+                {/* 🟢 新增儲位欄位 */}
+                <th className="p-4">儲位</th>
                 <th className="p-4">淨重</th>
                 <th className="p-4">備註</th>
                 <th className="p-4">操作人員</th>
@@ -46,7 +48,7 @@ const Logs: React.FC<LogsProps> = ({ logs }) => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {displayLogs.length === 0 ? (
-                <tr><td colSpan={8} className="p-8 text-center text-slate-400">無紀錄</td></tr>
+                <tr><td colSpan={9} className="p-8 text-center text-slate-400">無紀錄</td></tr>
               ) : (
                 displayLogs.map(l => (
                   <tr key={l.id} className="hover:bg-slate-50 transition">
@@ -63,6 +65,8 @@ const Logs: React.FC<LogsProps> = ({ logs }) => {
                     </td>
                     <td className="p-4 font-bold text-slate-600">{l.content}</td>
                     <td className="p-4 text-slate-600">{l.zone}</td>
+                    {/* 🟢 顯示儲位 */}
+                    <td className="p-4 text-blue-600 font-bold">{l.slot || '-'}</td>
                     <td className="p-4 font-mono">{Number(l.weight).toLocaleString()}</td>
                     <td className="p-4 text-slate-500 text-xs truncate max-w-[150px]" title={l.remark}>{l.remark || '-'}</td>
                     <td className="p-4 text-xs text-slate-400">{l.user}</td>
