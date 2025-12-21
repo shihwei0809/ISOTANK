@@ -3,12 +3,31 @@ import { supabase } from '../supabaseClient';
 import { AllData } from '../types';
 
 export const api = {
-  // 1. 登入 (維持現狀)
+  // 1. 登入功能 (改為讀取 Supabase users 資料表)
   login: async (user: string, pass: string) => {
-    await new Promise(r => setTimeout(r, 500));
-    if (user.toLowerCase() === 'admin' && pass === '1234') return { status: 'success', user: 'AdminUser', role: 'admin' as const };
-    if (user.toLowerCase() === 'view' && pass === '1234') return { status: 'success', user: 'Viewer', role: 'view' as const };
-    return { status: 'error', message: '帳號或密碼錯誤' };
+    try {
+      // 去資料庫找看看有沒有這個帳號 (轉小寫比對) 且 密碼正確
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.toLowerCase())
+        .eq('password', pass)
+        .single();
+
+      if (error || !data) {
+        // 找不到或錯誤
+        return { status: 'error', message: '帳號或密碼錯誤' };
+      }
+
+      // 登入成功，回傳資料庫裡的名稱和權限
+      return {
+        status: 'success',
+        user: data.name,
+        role: data.role as 'admin' | 'view'
+      };
+    } catch (e) {
+      return { status: 'error', message: '登入驗證失敗' };
+    }
   },
 
   // 2. 讀取資料 (從 Supabase)
