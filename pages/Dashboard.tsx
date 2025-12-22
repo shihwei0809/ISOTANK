@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
-import { Tank, Zone } from '../types';
+import { Tank, Zone, LogEntry } from '../types';
 import ZoneModal from '../components/ZoneModal';
 
 interface DashboardProps {
   zones: Zone[];
   inventory: Tank[];
-  isAdmin: boolean;
-  onMoveOut: (id: string, zoneName: string) => void;
+  logs?: LogEntry[]; // Added logs
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
-const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMoveOut }) => {
+
+const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
@@ -157,19 +157,7 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
                           )}
                         </div>
                       </div>
-                      {isAdmin && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm(`確定將 ${tank.id} 移出 ${zone.name}？`)) {
-                              onMoveOut(tank.id, zone.name);
-                            }
-                          }}
-                          className="text-xs bg-red-50 text-red-500 px-2 py-1 rounded hover:bg-red-100 mt-1 shrink-0"
-                        >
-                          移出
-                        </button>
-                      )}
+                      {/* Move Out button removed */}
                     </div>
                   ))
                 )}
@@ -184,12 +172,7 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, isAdmin, onMove
         onClose={() => setSelectedZoneId(null)}
         zone={selectedZone}
         tanks={selectedZoneTanks}
-        isAdmin={isAdmin}
-        onMoveOut={(id, zoneName) => {
-          if (window.confirm(`確定將 ${id} 移出 ${zoneName}？`)) {
-            onMoveOut(id, zoneName);
-          }
-        }}
+      // isAdmin and onMoveOut removed as they are no longer passed to Dashboard
       />
     </div>
   );

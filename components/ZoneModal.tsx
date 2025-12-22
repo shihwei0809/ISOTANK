@@ -6,11 +6,9 @@ interface ZoneModalProps {
   onClose: () => void;
   zone: Zone | null;
   tanks: Tank[];
-  isAdmin: boolean;
-  onMoveOut: (tankId: string, zoneName: string) => void;
 }
 
-const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks, isAdmin, onMoveOut }) => {
+const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks }) => {
   if (!isOpen || !zone) return null;
 
   const count = tanks.length;
@@ -81,16 +79,7 @@ const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks, isA
                         )}
                       </div>
                     </div>
-                    {isAdmin && (
-                      <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
-                        <button
-                          onClick={() => onMoveOut(tank.id, zone.name)}
-                          className="bg-white text-red-500 border border-red-200 hover:bg-red-50 hover:border-red-400 font-bold py-2 px-4 rounded text-sm transition flex items-center w-full justify-center sm:w-auto"
-                        >
-                          <i className="fa-solid fa-arrow-right-from-bracket mr-2"></i> 移出
-                        </button>
-                      </div>
-                    )}
+                    {/* Move Out button removed */}
                   </div>
                 ))}
               </div>

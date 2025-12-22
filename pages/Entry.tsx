@@ -1,400 +1,225 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { InventoryItem, Zone, LogEntry, RegistryItem } from '../types';
+import { Zone, InventoryItem } from '../types';
 
 interface EntryProps {
   zones: Zone[];
   inventory: InventoryItem[];
-  logs?: LogEntry[];
-  registry?: RegistryItem[];
-  onEntry?: (data: any) => Promise<void>;
-  isAdmin?: boolean;
+  onRefresh: () => void;
   user: string;
-  onRefresh?: () => void;
 }
 
-const Entry: React.FC<EntryProps> = ({ zones, inventory, onEntry, user, onRefresh }) => {
+const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
+  // --- State 定義 ---
+  const [id, setId] = useState('');
+  const [content, setContent] = useState('');
+  const [zone, setZone] = useState('');
+  // const [slot, setSlot] = useState(''); // 修改：移除停車格狀態
 
-  const getZoneCapacity = (zoneName: string) => {
-    if (zoneName === 'Z-1' || zoneName.includes('A區')) return 35;
-    if (zoneName === 'Z-2' || zoneName.includes('B區')) return 40;
-    return 20;
-  };
+  // 重量相關
+  const [total, setTotal] = useState('');
+  const [head, setHead] = useState('');
+  const [empty, setEmpty] = useState(''); // 空櫃重
+  const [net, setNet] = useState(0);
 
-  const generateSlots = (zoneName: string) => {
-    if (!zoneName) return [];
-    const count = getZoneCapacity(zoneName);
-    return Array.from({ length: count }, (_, i) => `${zoneName}-${i + 1}`);
-  };
-
-  // 取得現在時間的函式 (格式: YYYY-MM-DDTHH:mm)
-  const getCurrentTime = () => {
-    const now = new Date();
-    // 處理時區問題，確保顯示的是當地時間
-    const offset = now.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
-    return localISOTime;
-  };
-
-  const [formData, setFormData] = useState({
-    tankId: '',
-    content: '',
-    zone: '',
-    slot: '',
-    netWeight: 0,
-    totalWeight: '',
-    headWeight: '',
-    emptyWeight: '',
-    remark: '',
-    customTime: getCurrentTime()
-  });
-
-  const [message, setMessage] = useState({ text: '', type: '' });
   const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState({ type: '', text: '' });
 
-  // Auto Search State
-  const [isSearching, setIsSearching] = useState(false);
-  const [tankLocation, setTankLocation] = useState<string>('');
-  const formRef = useRef<HTMLDivElement>(null);
-
-  // 初始化區域
+  // 初始化：預設選第一個區域
   useEffect(() => {
-    if (zones.length > 0 && !formData.zone) {
-      const firstZone = zones[0].name;
-      const firstSlot = `${firstZone}-1`;
-      setFormData(prev => ({
-        ...prev,
-        zone: firstZone,
-        slot: firstSlot
-      }));
+    if (zones.length > 0 && !zone) {
+      setZone(zones[0].id);
     }
-  }, [zones]);
+  }, [zones, zone]);
 
-  // 當 Zone 改變時，預設選擇第一個 Slot
+  // 自動計算淨重
   useEffect(() => {
-    if (formData.zone) {
-      if (!formData.slot.startsWith(formData.zone)) {
-        setFormData(prev => ({ ...prev, slot: `${prev.zone}-1` }));
-      }
+    const t = parseFloat(total) || 0;
+    const h = parseFloat(head) || 0;
+    const e = parseFloat(empty) || 0;
+    // 淨重 = 總重 - 車頭 - 空櫃
+    const val = t - h - e;
+    setNet(val > 0 ? val : 0);
+  }, [total, head, empty]);
+
+  // 當輸入車號時，自動帶入歷史資料
+  const handleIdBlur = async () => {
+    if (!id) return;
+    // 呼叫 API 查詢該車號的歷史紀錄
+    const res = await api.getTankMaintenance(id);
+    if (res.status === 'success' && res.tank) {
+      // 自動填入：內容物、上次車頭重、上次空櫃重
+      // 注意：這裡不填總重，因為總重每次進場都不一樣
+      if (res.tank.content) setContent(res.tank.content);
+      if (res.tank.lastHead) setHead(String(res.tank.lastHead));
+      if (res.tank.empty) setEmpty(String(res.tank.empty));
     }
-  }, [formData.zone]);
+  };
 
-  // 計算淨重
-  useEffect(() => {
-    const total = parseFloat(formData.totalWeight) || 0;
-    const head = parseFloat(formData.headWeight) || 0;
-    const empty = parseFloat(formData.emptyWeight) || 0;
-
-    if (total > 0 && head > 0 && empty > 0) {
-      const rawNet = total - head - empty;
-      // 使用 parseFloat(x.toFixed(2)) 確保數字乾淨
-      const net = Math.max(0, parseFloat(rawNet.toFixed(2)));
-      setFormData(prev => ({ ...prev, netWeight: net }));
-    } else {
-      setFormData(prev => ({ ...prev, netWeight: 0 }));
-    }
-  }, [formData.totalWeight, formData.headWeight, formData.emptyWeight]);
-
-  // 車號自動搜尋邏輯 (合併了 HEAD 的 onBlur 和 Incoming 的 useEffect)
-  useEffect(() => {
-    const id = formData.tankId.trim().toUpperCase();
-    if (id.length < 3) {
-      setTankLocation('');
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setIsSearching(true);
-      setTankLocation('');
-
-      try {
-        const res = await api.getTankMaintenance(id);
-
-        if (res.status === 'success' && res.tank) {
-          if (res.tank.zoneName) { // api.ts 需要確保回傳 zoneName
-            // 注意: api.ts fixed version 的 tank 物件可能沒有 zoneName, 需檢查
-            // 假設 getTankMaintenance 回傳的 TankMaintenanceData 擴充了 zoneName? 
-            // 暫時忽略 zoneName 顯式檢查錯誤, 
-            // 其實 getTankMaintenance 回傳的是 { tank: {...}, history: [] }
-            // fixed api.ts 中 tank 有: id, empty, content, lastNet, lastTotal, lastHead
-          }
-
-          setFormData(prev => ({
-            ...prev,
-            content: res.tank.content || prev.content,
-            totalWeight: res.tank.lastTotal ? String(res.tank.lastTotal) : prev.totalWeight,
-            headWeight: res.tank.lastHead ? String(res.tank.lastHead) : prev.headWeight,
-            emptyWeight: res.tank.empty ? String(res.tank.empty) : prev.emptyWeight,
-          }));
-        }
-      } catch (error) {
-        console.error("Auto search failed", error);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [formData.tankId]);
-
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-
-    if (!formData.tankId) {
-      setMessage({ text: '錯誤：請填寫車號', type: 'error' });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !zone) {
+      setMsg({ type: 'error', text: '請填寫完整資訊 (車號、區域)' });
       return;
     }
 
     setLoading(true);
-    const selectedZone = zones.find(z => z.name === formData.zone) || zones[0];
-    const zoneId = selectedZone ? selectedZone.id : 'Z-01';
+    setMsg({ type: '', text: '' });
 
-    const payload = {
-      id: formData.tankId.toUpperCase(),
-      content: formData.content,
-      zone: zoneId,
-      zoneName: formData.zone,
-      slot: formData.slot,
-      netWeight: formData.netWeight,
-      totalWeight: formData.totalWeight,
-      headWeight: formData.headWeight,
-      emptyWeight: formData.emptyWeight,
-      remark: formData.remark,
-      user: user,
-      customTime: formData.customTime
+    // 找出區域名稱 (用於 Log 顯示)
+    const currentZoneName = zones.find(z => z.id === zone)?.name || zone;
+
+    const data = {
+      id: id.toUpperCase(), // 強制轉大寫
+      content,
+      zone,
+      zoneName: currentZoneName,
+      // slot, // 修改：移除 Slot 參數
+      totalWeight: parseFloat(total) || 0,
+      headWeight: parseFloat(head) || 0,
+      emptyWeight: parseFloat(empty) || 0,
+      netWeight: net,
+      user,
+      customTime: new Date().toISOString() // 使用當下時間
     };
 
-    const resetForm = () => {
-      setFormData({
-        tankId: '',
-        content: '',
-        zone: formData.zone,
-        slot: formData.slot, // Keep slot or reset? Incoming kept it
-        netWeight: 0,
-        totalWeight: '',
-        headWeight: '',
-        emptyWeight: '',
-        remark: '',
-        customTime: getCurrentTime()
-      });
-      setTankLocation('');
-    };
+    const res = await api.gateIn(data);
 
-    try {
-      if (onEntry) {
-        await onEntry(payload);
-        setMessage({ text: `進場成功！位置：${formData.slot}`, type: 'success' });
-        resetForm();
-        setTimeout(() => {
-          const tankInput = formRef.current?.querySelector('input[name="tankId"]') as HTMLElement;
-          tankInput?.focus();
-        }, 100);
-      } else {
-        // Fallback if no onEntry prop (support HEAD behavior)
-        const res = await api.gateIn(payload);
-        if (res.status === 'success') {
-          setMessage({ text: '進場作業成功！', type: 'success' });
-          resetForm();
-          if (onRefresh) onRefresh();
-        } else {
-          setMessage({ text: res.message || '作業失敗', type: 'error' });
-        }
-      }
-    } catch (err: any) {
-      setMessage({ text: err.message || '作業失敗', type: 'error' });
+    if (res.status === 'success') {
+      setMsg({ type: 'success', text: res.message });
+      // 清空表單，保留部分不會變的資訊(如區域)方便連續輸入
+      setId('');
+      setTotal('');
+      // setContent(''); // 內容物通常會變，也可以不清空看需求
+      onRefresh(); // 通知上層重新讀取資料
+    } else {
+      setMsg({ type: 'error', text: res.message });
     }
-
     setLoading(false);
-    setTimeout(() => setMessage({ text: '', type: '' }), 3000);
   };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.nativeEvent.isComposing) return;
-
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const target = e.target as HTMLElement;
-
-      const inputs = Array.from(
-        formRef.current?.querySelectorAll('input:not([type="hidden"]):not([disabled]), select:not([disabled]), button:not([disabled])') || []
-      ) as HTMLElement[];
-
-      const index = inputs.indexOf(target);
-
-      if (index === inputs.length - 1) {
-        handleSubmit();
-        return;
-      }
-
-      if (index > -1 && index < inputs.length - 1) {
-        const nextInput = inputs[index + 1];
-        nextInput.focus();
-        if (nextInput instanceof HTMLInputElement) {
-          nextInput.select();
-        }
-      }
-    }
-  };
-
-  const currentSlots = generateSlots(formData.zone);
 
   return (
-    <div className="p-4 max-w-lg mx-auto bg-white rounded-lg shadow-md">
-      <h2 className="text-xl font-bold mb-4 text-gray-700">🚛 槽車進場作業</h2>
-
-      {message.text && (
-        <div className={`mb-4 p-2 rounded text-center ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-          {message.text}
-        </div>
-      )}
-
-      <div ref={formRef} onKeyDown={handleKeyDown} className="space-y-4">
-
-        <div>
-          <label className="block text-sm font-bold text-gray-700">
-            進場時間 (Time) <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="datetime-local"
-            name="customTime"
-            className="w-full p-2 border border-gray-300 rounded mt-1 font-mono text-gray-600 bg-gray-50"
-            value={formData.customTime}
-            onChange={e => setFormData({ ...formData, customTime: e.target.value })}
-            required
-          />
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+        <div className="flex items-center mb-6 border-b pb-4">
+          <i className="fa-solid fa-truck-moving text-2xl text-amber-500 mr-3"></i>
+          <h2 className="text-xl font-bold text-slate-800">槽車進場作業</h2>
         </div>
 
-        <div className="relative">
-          <label className="block text-sm font-bold text-gray-700">
-            車號 (Tank ID) <span className="text-red-500">*</span>
-          </label>
-          <div className="relative">
+        {/* 訊息提示區 */}
+        {msg.text && (
+          <div className={`p-4 mb-4 rounded-lg text-center font-bold ${msg.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}>
+            {msg.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* 進場時間 (唯讀，顯示當下) */}
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">進場時間 (Time) *</label>
             <input
               type="text"
-              name="tankId"
-              className={`w-full p-2 border rounded mt-1 focus:ring-2 outline-none uppercase pr-10 ${tankLocation ? 'border-amber-500 ring-1 ring-amber-500' : 'border-gray-300 focus:ring-blue-500'}`}
+              value={new Date().toLocaleString()}
+              disabled
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-500"
+            />
+          </div>
+
+          {/* 車號 */}
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">車號 (Tank ID) *</label>
+            <input
+              type="text"
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              onBlur={handleIdBlur} // 離開焦點時查詢歷史
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
               placeholder="例如: TNKU1234567"
-              value={formData.tankId}
-              onChange={e => setFormData({ ...formData, tankId: e.target.value.toUpperCase() })}
+              required
             />
-            {isSearching && (
-              <div className="absolute right-3 top-3 text-gray-400 animate-pulse">
-                <i className="fa-solid fa-spinner fa-spin"></i>
-              </div>
-            )}
           </div>
 
-          {tankLocation && (
-            <div className="mt-1 text-red-600 text-sm font-bold flex items-center animate-fade-in">
-              <i className="fa-solid fa-triangle-exclamation mr-1"></i>
-              目前位於: {tankLocation} (已自動帶入資訊)
+          {/* 內容物 */}
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">內容物 (Content)</label>
+            <input
+              type="text"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
+              placeholder="請輸入化學品名稱"
+            />
+          </div>
+
+          {/* 修改：只保留區域 (Zone)，移除 Slot，並讓 Select 寬度為 w-full */}
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">區域 (Zone)</label>
+            <select
+              value={zone}
+              onChange={(e) => setZone(e.target.value)}
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition bg-white"
+            >
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* 重量輸入區 (兩兩一排) */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold text-slate-600 mb-1">總重 (Total)</label>
+              <input
+                type="number"
+                value={total}
+                onChange={(e) => setTotal(e.target.value)}
+                className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
+                placeholder="過磅總重"
+              />
             </div>
-          )}
-        </div>
-
-        {/* 內容物 */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700">內容物 (Content)</label>
-          <input
-            type="text"
-            className="w-full p-2 border border-gray-300 rounded mt-1 transition-colors duration-300"
-            style={{ backgroundColor: formData.content ? '#f0f9ff' : 'white' }}
-            value={formData.content}
-            onChange={e => setFormData({ ...formData, content: e.target.value })}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-bold text-gray-700">區域 (Zone)</label>
-            <select
-              className="w-full p-2 border border-gray-300 rounded mt-1"
-              value={formData.zone}
-              onChange={e => setFormData({ ...formData, zone: e.target.value })}
-            >
-              {zones.map(z => (
-                <option key={z.id} value={z.name}>{z.name}</option>
-              ))}
-            </select>
+            <div>
+              <label className="block text-sm font-bold text-slate-600 mb-1">車頭重 (Head)</label>
+              <input
+                type="number"
+                value={head}
+                onChange={(e) => setHead(e.target.value)}
+                className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
+                placeholder="車頭重量"
+              />
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-700">停車格 (Slot)</label>
-            <select
-              className="w-full p-2 border border-gray-300 rounded mt-1 bg-yellow-50"
-              value={formData.slot}
-              onChange={e => setFormData({ ...formData, slot: e.target.value })}
-            >
-              {currentSlots.map(slot => (
-                <option key={slot} value={slot}>{slot}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* step=10 設定 */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-bold text-gray-700">總重 (Total)</label>
+            <label className="block text-sm font-bold text-slate-600 mb-1">空櫃重 (Empty)</label>
             <input
               type="number"
-              step={10}
-              className="w-full p-2 border rounded mt-1"
-              value={formData.totalWeight}
-              onChange={e => setFormData({ ...formData, totalWeight: e.target.value })}
+              value={empty}
+              onChange={(e) => setEmpty(e.target.value)}
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
+              placeholder="槽體空重"
             />
           </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700">車頭重 (Head)</label>
-            <input
-              type="number"
-              step={10}
-              className="w-full p-2 border rounded mt-1"
-              value={formData.headWeight}
-              onChange={e => setFormData({ ...formData, headWeight: e.target.value })}
-            />
+
+          {/* 淨重顯示區 */}
+          <div className="bg-blue-50 p-4 rounded-lg flex justify-between items-center border border-blue-100">
+            <span className="text-blue-800 font-bold">淨重 (Net Weight):</span>
+            <span className="text-2xl font-bold text-blue-600">{net} <span className="text-sm">kg</span></span>
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-bold text-gray-700">空櫃重 (Empty)</label>
-          <input
-            type="number"
-            step={10}
-            className="w-full p-2 border rounded mt-1"
-            value={formData.emptyWeight}
-            onChange={e => setFormData({ ...formData, emptyWeight: e.target.value })}
-          />
-        </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full p-4 mt-4 text-white font-bold rounded-lg shadow-lg transition flex justify-center items-center
+              ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800'}`}
+          >
+            {loading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>}
+            {loading ? '處理中...' : '確認進場'}
+          </button>
 
-        <div className="bg-blue-50 p-3 rounded text-center">
-          <span className="text-gray-600 font-bold">淨重 (Net Weight): </span>
-          {/* 雙重保險：顯示時再次格式化，絕對不顯示長小數 */}
-          <span className="text-2xl font-bold text-blue-600">
-            {Number(formData.netWeight).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </span>
-        </div>
-
-        <div>
-          <label className="block text-sm font-bold text-gray-700">備註 (Remark)</label>
-          <input
-            type="text"
-            className="w-full p-2 border border-gray-300 rounded mt-1"
-            value={formData.remark}
-            onChange={e => setFormData({ ...formData, remark: e.target.value })}
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => handleSubmit()}
-          disabled={loading}
-          className={`w-full p-3 text-white font-bold rounded shadow transition 
-            ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-        >
-          {loading ? '處理中...' : '確認進場'}
-        </button>
+        </form>
       </div>
     </div>
   );

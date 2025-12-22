@@ -1,195 +1,160 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Entry from './pages/Entry';
-import Weight from './pages/Weight';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
+import Weight from './pages/Weight';
 import { api } from './services/api';
 import { AllData } from './types';
-// 🟢 1. 引入圖片 (請確認這個路徑下真的有圖片)
-import shinyLogo from './assets/shiny-logo.png';
 
-const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<string | null>(null);
-  const [role, setRole] = useState<'admin' | 'view' | null>(null);
+function App() {
+  const [user, setUser] = useState<{ id: string; role: 'admin' | 'view' } | null>(null);
   const [page, setPage] = useState('dashboard');
-  const [data, setData] = useState<AllData>({ zones: [], inventory: [], logs: [], registry: [] });
+  const [data, setData] = useState<AllData>({
+    zones: [],
+    inventory: [],
+    logs: [],
+    registry: []
+  });
   const [loading, setLoading] = useState(false);
 
-  // Load user from session storage if exists (simple persistence)
-  useEffect(() => {
-    const savedUser = sessionStorage.getItem('iso_user');
-    const savedRole = sessionStorage.getItem('iso_role') as 'admin' | 'view';
-    if (savedUser && savedRole) {
-      setCurrentUser(savedUser);
-      setRole(savedRole);
-    }
-  }, []);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await api.read();
-      setData(result);
-    } catch (error) {
-      console.error(error);
-      alert("讀取資料失敗");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (currentUser) {
-      fetchData();
-    }
-  }, [currentUser, fetchData]);
-
-  const handleLogin = (user: string, role: 'admin' | 'view') => {
-    setCurrentUser(user);
-    setRole(role);
-    sessionStorage.setItem('iso_user', user);
-    sessionStorage.setItem('iso_role', role);
+  // 登入處理
+  const handleLogin = (userId: string, role: 'admin' | 'view') => {
+    setUser({ id: userId, role });
+    loadData(); // 登入後立即讀取資料
   };
 
   const handleLogout = () => {
-    if (window.confirm('確定要登出嗎？')) {
-      setCurrentUser(null);
-      setRole(null);
-      sessionStorage.clear();
-      setPage('dashboard');
-    }
+    setUser(null);
+    setPage('dashboard');
   };
 
-  const handleMoveOut = async (id: string, zoneName: string) => {
-    if (!currentUser) return;
+  // 讀取所有資料
+  const loadData = async () => {
     setLoading(true);
-    try {
-      const res = await api.delete(id, zoneName, currentUser);
-      if (res.status === 'success') {
-        await fetchData();
-      } else {
-        alert(res.message);
-      }
-    } finally {
-      setLoading(false);
-    }
+    const res = await api.read();
+    setData(res);
+    setLoading(false);
   };
 
-  const handleEntry = async (formData: any) => {
-    setLoading(true);
-    try {
-      const res = await api.gateIn({ ...formData, action: 'add' });
-      if (res.status === 'success') {
-        alert(res.message);
-        await fetchData();
-      } else {
-        alert(res.message);
-      }
-    } finally {
-      setLoading(false);
+  // 定時重整 (例如每 30 秒)
+  useEffect(() => {
+    if (user) {
+      const interval = setInterval(loadData, 30000);
+      return () => clearInterval(interval);
     }
-  };
+  }, [user]);
 
-  if (!currentUser) {
+  // 如果未登入，顯示登入頁面
+  if (!user) {
     return <Login onLogin={handleLogin} />;
   }
 
-  const navItems = [
-    { id: 'dashboard', icon: 'fa-chart-pie', label: '場站總覽' },
-    { id: 'entry', icon: 'fa-truck-ramp-box', label: '進場作業' },
-    { id: 'weight', icon: 'fa-weight-hanging', label: '重量維護' },
-    { id: 'logs', icon: 'fa-list', label: '進出紀錄' },
-    { id: 'settings', icon: 'fa-gear', label: '區域設定' }
+  // --- 側邊欄選單項目 ---
+  const menuItems = [
+    { id: 'dashboard', label: '場站總覽', icon: 'fa-chart-pie' },
+    { id: 'entry', label: '進場作業', icon: 'fa-truck-ramp-box' },
+    { id: 'weight', label: '重量維護', icon: 'fa-scale-balanced' }, // 新增的重量維護頁面
+    { id: 'logs', label: '進出紀錄', icon: 'fa-list' },
   ];
 
-  return (
-    <div className="flex h-screen w-full bg-slate-50 text-slate-800 font-sans overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between shrink-0 z-20 transition-all">
-        <div>
-          {/* 🟢 2. 修改標題區塊：加入 Logo 圖片 */}
-          <div className="p-6 flex flex-col items-center justify-center gap-2 border-b border-slate-800">
-            {/* Logo 圖片 */}
-            <img
-              src={shinyLogo}
-              alt="勝一化工"
-              className="w-4/5 h-auto object-contain mb-2" // 控制圖片大小與間距
-            />
+  // 只有管理員才看得到「區域設定」
+  if (user.role === 'admin') {
+    menuItems.push({ id: 'settings', label: '區域設定', icon: 'fa-gear' });
+  }
 
-            {/* 原有的標題文字與圖示 */}
-            <div className="flex items-center gap-3">
-              <i className="fa-solid fa-cloud text-amber-500 text-2xl"></i>
-              <h1 className="font-bold text-lg tracking-wider leading-tight">ISO TANK<br />進出管理</h1>
-            </div>
+  return (
+    <div className="flex h-screen bg-slate-100 font-sans text-slate-800">
+
+      {/* --- 左側側邊欄 (修改處：Logo 與公司名稱) --- */}
+      <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20">
+        <div className="p-8 text-center border-b border-slate-800">
+
+          {/* 修改：Logo 區域 */}
+          <div className="w-20 h-20 mx-auto mb-4 bg-white rounded-full flex items-center justify-center shadow-lg ring-4 ring-amber-500/30">
+            {/* 這裡使用一個文字圖標代替圖片，如果您有鴻勝的圖片 URL，請用 <img src="..." /> 取代下方的 <i> */}
+            <span className="text-amber-600 text-3xl font-black">鴻</span>
           </div>
 
-          <nav className="flex flex-col w-full mt-2">
-            {navItems.map(item => (
-              <div
-                key={item.id}
-                onClick={() => setPage(item.id)}
-                className={`px-6 py-4 flex items-center gap-3 cursor-pointer transition-all hover:bg-white/10 ${page === item.id ? 'text-amber-500 bg-white/10' : 'text-slate-400'}`}
-              >
-                <i className={`fa-solid ${item.icon} w-6`}></i>
-                <span>{item.label}</span>
-              </div>
-            ))}
-          </nav>
+          {/* 修改：公司名稱 */}
+          <h2 className="text-2xl font-bold tracking-wider text-white">鴻勝 <span className="text-amber-500">ISO</span></h2>
+          <p className="text-slate-400 text-xs mt-2 uppercase tracking-widest">Tank Management</p>
         </div>
 
-        <div className="p-4 border-t border-slate-700 text-center">
-          <div className="text-xs text-slate-500 mb-2 flex items-center justify-center">
-            已登入：<span className="text-white font-bold ml-1">{currentUser}</span>
-            <span className={`ml-2 text-[10px] px-2 rounded ${role === 'admin' ? 'bg-amber-500 text-black' : 'bg-slate-500 text-white'}`}>
-              {role === 'admin' ? 'ADMIN' : 'VIEW'}
+        <nav className="flex-1 overflow-y-auto py-6">
+          <ul className="space-y-2 px-4">
+            {menuItems.map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={() => setPage(item.id)}
+                  className={`w-full flex items-center space-x-4 px-6 py-4 rounded-xl transition-all duration-200 group
+                    ${page === item.id
+                      ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30 font-bold transform scale-105'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                    }`}
+                >
+                  <i className={`fa-solid ${item.icon} w-6 text-center text-lg ${page === item.id ? 'text-white' : 'text-slate-500 group-hover:text-amber-400'}`}></i>
+                  <span>{item.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="p-4 border-t border-slate-800 bg-slate-950">
+          <div className="flex items-center justify-between px-2 mb-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                <i className="fa-solid fa-user text-xs text-slate-300"></i>
+              </div>
+              <div className="text-left">
+                <div className="text-xs text-slate-400">已登入 :</div>
+                <div className="text-sm font-bold text-white capitalize">{user.id}</div>
+              </div>
+            </div>
+            <span className={`text-[10px] px-2 py-1 rounded border ${user.role === 'admin' ? 'border-amber-500 text-amber-500' : 'border-blue-500 text-blue-500'}`}>
+              {user.role === 'admin' ? 'ADMIN' : 'VIEW'}
             </span>
           </div>
-          <button onClick={handleLogout} className="text-slate-400 hover:text-white flex items-center justify-center w-full gap-2 py-2 text-sm border border-slate-700 rounded hover:bg-slate-800 mb-2">
-            <i className="fa-solid fa-sign-out"></i> 登出
-          </button>
-          <button onClick={fetchData} className="text-slate-400 hover:text-white flex items-center justify-center w-full gap-2 py-2 text-sm">
-            <i className="fa-solid fa-sync"></i> 重新整理
+          <button
+            onClick={handleLogout}
+            className="w-full py-2 border border-slate-700 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition text-sm flex items-center justify-center space-x-2"
+          >
+            <i className="fa-solid fa-right-from-bracket"></i>
+            <span>登出系統</span>
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-y-auto relative">
-        {loading && (
-          <div className="absolute inset-0 bg-white/80 z-[60] flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin"></div>
-            <p className="mt-2 text-sm font-bold text-slate-600">處理中...</p>
-          </div>
-        )}
-
-        <header className="bg-white px-6 py-4 border-b flex justify-between items-center sticky top-0 z-10 shadow-sm h-16 shrink-0">
-          <h2 className="text-xl md:text-2xl font-bold truncate capitalize">{navItems.find(n => n.id === page)?.label}</h2>
-          {role === 'admin' && page !== 'entry' && (
-            <button
-              onClick={() => setPage('entry')}
-              className="bg-slate-900 text-white px-4 py-2 rounded font-bold shadow hover:bg-slate-700 text-sm md:text-base flex items-center"
-            >
-              <i className="fa-solid fa-plus mr-1"></i>
-              <span className="hidden md:inline">快速進場</span>
-            </button>
-          )}
+      {/* --- 右側主內容區 --- */}
+      <main className="flex-1 overflow-y-auto relative">
+        {/* 頂部標題列 */}
+        <header className="bg-white shadow-sm sticky top-0 z-10 px-8 py-5 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-slate-800">
+            {menuItems.find(i => i.id === page)?.label}
+          </h1>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="text-slate-400 hover:text-amber-600 transition flex items-center space-x-2 text-sm font-medium"
+          >
+            <i className={`fa-solid fa-arrows-rotate ${loading ? 'fa-spin' : ''}`}></i>
+            <span>{loading ? '更新中...' : '重新整理'}</span>
+          </button>
         </header>
 
-        <div className="p-4 md:p-8 w-full max-w-[1600px] mx-auto pb-24 flex-1">
-          {page === 'dashboard' && <Dashboard zones={data.zones} inventory={data.inventory} isAdmin={role === 'admin'} onMoveOut={handleMoveOut} />}
-          {page === 'entry' && <Entry zones={data.zones} inventory={data.inventory} logs={data.logs} registry={data.registry} onEntry={handleEntry} isAdmin={role === 'admin'} user={currentUser} />}
-
-          {/* 🟢 3. 修正 Weight 元件呼叫：補上 zones 屬性 */}
-          {page === 'weight' && <Weight isAdmin={role === 'admin'} user={currentUser} zones={data.zones} refreshData={fetchData} />}
-
+        {/* 頁面內容路由 */}
+        <div className="p-8">
+          {page === 'dashboard' && <Dashboard zones={data.zones} inventory={data.inventory} logs={data.logs} />}
+          {page === 'entry' && <Entry zones={data.zones} inventory={data.inventory} onRefresh={loadData} user={user.id} />}
+          {page === 'weight' && <Weight registry={data.registry} onRefresh={loadData} user={user.id} zones={data.zones} isAdmin={user.role === 'admin'} />}
           {page === 'logs' && <Logs logs={data.logs} />}
-          {page === 'settings' && <Settings zones={data.zones} isAdmin={role === 'admin'} refreshData={fetchData} />}
+          {page === 'settings' && <Settings zones={data.zones} onSave={api.updateSettings} onRefresh={loadData} />}
         </div>
       </main>
     </div>
   );
-};
+}
 
 export default App;

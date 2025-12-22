@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
-import { Zone } from '../types';
+import { Zone, RegistryItem } from '../types';
 
 interface WeightProps {
-  isAdmin: boolean;
+  isAdmin?: boolean; // Optional, default to false if not passed? Or App.tsx should pass it.
   user: string;
-  zones: Zone[];
-  refreshData: () => void;
+  zones?: Zone[]; // Optional? App.tsx might default? No, needed for dropdown.
+  registry?: RegistryItem[]; // Added registry
+  onRefresh: () => void; // Renamed from refreshData
 }
 
-const Weight: React.FC<WeightProps> = ({ isAdmin, user, zones, refreshData }) => {
+const Weight: React.FC<WeightProps> = ({ isAdmin = false, user, zones = [], registry, onRefresh }) => {
   const [tankId, setTankId] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<{ tank: any; history: any[] } | null>(null);
@@ -73,7 +74,8 @@ const Weight: React.FC<WeightProps> = ({ isAdmin, user, zones, refreshData }) =>
       });
       if (res.status === 'success') {
         alert(res.message);
-        refreshData();
+        alert(res.message);
+        onRefresh();
         handleSearch(); // Refresh local view
       } else {
         alert(res.message);
@@ -250,8 +252,8 @@ const Weight: React.FC<WeightProps> = ({ isAdmin, user, zones, refreshData }) =>
                         <td className="p-3 font-bold text-slate-700">{Number(h.net).toLocaleString()}</td>
                         <td className="p-3">
                           <span className={`text-xs px-2 py-1 rounded ${h.action === '進場' ? 'bg-green-100 text-green-600' :
-                              h.action === '出場' ? 'bg-red-100 text-red-600' :
-                                'bg-blue-100 text-blue-600'
+                            h.action === '出場' ? 'bg-red-100 text-red-600' :
+                              'bg-blue-100 text-blue-600'
                             }`}>
                             {h.action}
                           </span>

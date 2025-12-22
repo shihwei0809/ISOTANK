@@ -4,11 +4,11 @@ import { api } from '../services/api';
 
 interface SettingsProps {
   zones: Zone[];
-  isAdmin: boolean;
-  refreshData: () => void;
+  onSave: (zones: Zone[]) => Promise<any>;
+  onRefresh: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ zones, isAdmin, refreshData }) => {
+const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
   const [localZones, setLocalZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -36,14 +36,14 @@ const Settings: React.FC<SettingsProps> = ({ zones, isAdmin, refreshData }) => {
   };
 
   const handleSave = async () => {
-    if (!isAdmin) return;
+    // isAdmin check removed as access is controlled by parent
     if (!window.confirm('確定儲存所有區域設定？')) return;
     setLoading(true);
     try {
-      const res = await api.updateSettings(localZones);
+      const res = await onSave(localZones);
       if (res.status === 'success') {
         alert('設定已儲存');
-        refreshData();
+        onRefresh();
       } else {
         alert(res.message);
       }
@@ -56,14 +56,12 @@ const Settings: React.FC<SettingsProps> = ({ zones, isAdmin, refreshData }) => {
     <div className="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-fade-in">
       <div className="flex justify-between mb-6 items-center">
         <h3 className="font-bold text-lg">區域管理 (Zone Management)</h3>
-        {isAdmin && (
-          <button
-            onClick={handleAdd}
-            className="bg-amber-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-600 text-sm shadow"
-          >
-            <i className="fa-solid fa-plus mr-1"></i> 新增
-          </button>
-        )}
+        <button
+          onClick={handleAdd}
+          className="bg-amber-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-amber-600 text-sm shadow"
+        >
+          <i className="fa-solid fa-plus mr-1"></i> 新增
+        </button>
       </div>
 
       <div className="bg-slate-100 p-2 rounded-t-lg grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 uppercase">
@@ -79,8 +77,7 @@ const Settings: React.FC<SettingsProps> = ({ zones, isAdmin, refreshData }) => {
             <div className="col-span-3">
               <input
                 type="text"
-                disabled={!isAdmin}
-                className={`w-full border rounded px-2 py-1 text-sm font-mono text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
+                className={`w-full border rounded px-2 py-1 text-sm font-mono text-black bg-white`}
                 value={z.id}
                 onChange={(e) => handleChange(i, 'id', e.target.value)}
               />
@@ -88,8 +85,7 @@ const Settings: React.FC<SettingsProps> = ({ zones, isAdmin, refreshData }) => {
             <div className="col-span-6">
               <input
                 type="text"
-                disabled={!isAdmin}
-                className={`w-full border rounded px-2 py-1 text-sm text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
+                className={`w-full border rounded px-2 py-1 text-sm text-black bg-white`}
                 value={z.name}
                 onChange={(e) => handleChange(i, 'name', e.target.value)}
               />
@@ -97,33 +93,28 @@ const Settings: React.FC<SettingsProps> = ({ zones, isAdmin, refreshData }) => {
             <div className="col-span-2">
               <input
                 type="number"
-                disabled={!isAdmin}
-                className={`w-full border rounded px-2 py-1 text-sm text-center text-black ${!isAdmin ? 'bg-slate-100' : 'bg-white'}`}
+                className={`w-full border rounded px-2 py-1 text-sm text-center text-black bg-white`}
                 value={z.limit}
                 onChange={(e) => handleChange(i, 'limit', parseInt(e.target.value))}
               />
             </div>
             <div className="col-span-1 text-center">
-              {isAdmin && (
-                <button onClick={() => handleRemove(i)} className="text-red-400 hover:text-red-600 px-2">
-                  <i className="fa-solid fa-trash"></i>
-                </button>
-              )}
+              <button onClick={() => handleRemove(i)} className="text-red-400 hover:text-red-600 px-2">
+                <i className="fa-solid fa-trash"></i>
+              </button>
             </div>
           </div>
         ))}
       </div>
 
-      {isAdmin && (
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          className="mt-6 w-full bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-700 shadow flex justify-center items-center"
-        >
-          {loading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : null}
-          儲存所有設定
-        </button>
-      )}
+      <button
+        onClick={handleSave}
+        disabled={loading}
+        className="mt-6 w-full bg-slate-900 text-white py-3 rounded-lg font-bold hover:bg-slate-700 shadow flex justify-center items-center"
+      >
+        {loading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : null}
+        儲存所有設定
+      </button>
     </div>
   );
 };
