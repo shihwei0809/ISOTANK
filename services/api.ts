@@ -2,14 +2,14 @@ import { supabase } from '../supabaseClient';
 import { AllData } from '../types';
 
 export const api = {
-  // 1. 登入
+  // 1. 登入 (Login)
   login: async (user: string, pass: string) => {
     await new Promise(r => setTimeout(r, 500));
     try {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user)
+        .eq('id', user) // 移除 .toLowerCase()，支援大小寫
         .eq('password', pass)
         .single();
 
@@ -20,13 +20,43 @@ export const api = {
     }
   },
 
-  // 2. 讀取所有資料 (注意：Logs 這裡已經按照 ID 降序排列，也就是最新的在上面)
+  // 🔴 新增：註冊功能 (Register)
+  register: async (id: string, pass: string, name: string) => {
+    try {
+      // A. 檢查帳號是否已經存在
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', id)
+        .single();
+
+      if (existing) {
+        return { status: 'error', message: '此帳號 ID 已經被註冊過了' };
+      }
+
+      // B. 新增帳號 (預設權限為 view)
+      const { error } = await supabase.from('users').insert({
+        id: id,
+        password: pass,
+        name: name,
+        role: 'view' // 預設大家都是檢視者，需要管理員權限再去資料庫改
+      });
+
+      if (error) throw error;
+      return { status: 'success', message: '註冊成功！請直接登入' };
+
+    } catch (error: any) {
+      return { status: 'error', message: error.message || '註冊失敗' };
+    }
+  },
+
+  // 2. 讀取所有資料
   read: async (): Promise<AllData> => {
     try {
       const [zones, inventory, logs, registry] = await Promise.all([
         supabase.from('zones').select('*').order('id'),
         supabase.from('inventory').select('*'),
-        supabase.from('logs').select('*').order('id', { ascending: false }), // 最新紀錄排上面
+        supabase.from('logs').select('*').order('id', { ascending: false }),
         supabase.from('registry').select('*'),
       ]);
 
@@ -44,32 +74,27 @@ export const api = {
 
   // 3. 進場 / 移區
   gateIn: async (data: any) => {
-    const { id, content, zone, netWeight, remark, user, customTime, totalWeight, headWeight, emptyWeight, zoneName, slot } = data;
+    const { id, content, zone, netWeight, remark, user, customTime, totalWeight, headWeight, emptyWeight, zoneName } = data;
     const timeStr = customTime ? customTime.replace('T', ' ') : new Date().toLocaleString();
 
     try {
-      // 更新空車重紀錄 (Registry)
       if (emptyWeight) {
         await supabase.from('registry').upsert({
           id, empty: emptyWeight, content, "lastTotal": totalWeight, "lastHead": headWeight
         });
       }
 
-      // 檢查是否已在場內
       const { data: existingTank } = await supabase.from('inventory').select('*').eq('id', id).single();
-
-      // 更新庫存 (Inventory)
       const { error: invError } = await supabase.from('inventory').upsert({
-        id, content, weight: netWeight, zone, time: timeStr, remark: remark || '', slot
+        id, content, weight: netWeight, zone, time: timeStr, remark: remark || ''
       });
 
       if (invError) throw invError;
 
-      // 寫入紀錄 (Log)
       const logAction = existingTank ? (existingTank.zone === zone ? '更新' : '移區') : '進場';
       await supabase.from('logs').insert({
         time: timeStr, tank: id, action: logAction, zone: zoneName, "user": user || 'Unknown',
-        content, weight: netWeight, total: totalWeight, head: headWeight, empty: emptyWeight, remark, slot
+        content, weight: netWeight, total: totalWeight, head: headWeight, empty: emptyWeight, remark
       });
 
       return { status: 'success', message: `槽車 ${id} 作業成功 (${logAction})` };
@@ -107,36 +132,30 @@ export const api = {
 
   // 6. 更新基本資料
   updateRegistryData: async (data: any) => {
-    // 這裡邏輯保持不變，略...
-    const { id, empty, content, total, head, remark, user } = data;
+    const { id, empty, content, total, head } = data;
     try {
       await supabase.from('registry').upsert({ id, empty, content, "lastTotal": total, "lastHead": head });
-      // 同步更新庫存... (略，保持你原本功能)
       return { status: 'success', message: '基本資料更新成功' };
     } catch (error: any) {
       return { status: 'error', message: error.message };
     }
   },
 
-  // 7. 查詢歷史 (修正版：這裡會去抓最新的 Logs 資料！)
+  // 7. 查詢歷史
   getTankMaintenance: async (id: string) => {
     try {
-      // A. 先去 registry 找有沒有建檔
       const { data: regItem } = await supabase.from('registry').select('*').eq('id', id).single();
 
-      // B. 關鍵修正：去 logs 找「最新一筆」這台車的紀錄，抓取它的重量資訊
       const { data: latestLog } = await supabase
         .from('logs')
         .select('*')
         .eq('tank', id)
-        .order('id', { ascending: false }) // 最新的在最上面
+        .order('id', { ascending: false })
         .limit(1)
         .single();
 
-      // C. 抓取歷史列表
       const { data: tankLogs } = await supabase.from('logs').select('*').eq('tank', id).order('id', { ascending: false });
 
-      // D. 智慧判斷：優先用 Log 的資料，沒有才用 Registry，再沒有就回傳空字串
       const lastTotal = latestLog?.total || regItem?.lastTotal || '';
       const lastHead = latestLog?.head || regItem?.lastHead || '';
       const lastEmpty = latestLog?.empty || regItem?.empty || '';
@@ -149,8 +168,6 @@ export const api = {
         lastNet: latestLog?.weight || 0,
         lastTotal: lastTotal,
         lastHead: lastHead,
-        zoneName: latestLog?.zone || '',
-        slot: latestLog?.slot || ''
       };
 
       const history = (tankLogs || []).map((l: any) => ({
@@ -159,20 +176,7 @@ export const api = {
 
       return { status: 'success', tank, history };
     } catch (e) {
-      return {
-        status: 'success',
-        tank: {
-          id,
-          empty: '',
-          content: '',
-          lastNet: 0,
-          lastTotal: '',
-          lastHead: '',
-          zoneName: '',
-          slot: ''
-        },
-        history: []
-      };
+      return { status: 'success', tank: { id }, history: [] };
     }
   }
 };
