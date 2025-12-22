@@ -1,179 +1,163 @@
-import React, { useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
-import { Tank, Zone, LogEntry } from '../types';
-import ZoneModal from '../components/ZoneModal';
+import React, { useMemo } from 'react';
+import { Zone, InventoryItem, LogItem } from '../types';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 interface DashboardProps {
   zones: Zone[];
-  inventory: Tank[];
-  logs?: LogEntry[]; // Added logs
+  inventory: InventoryItem[];
+  logs: LogItem[];
 }
 
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+// 定義圖表顏色 (藍綠色系配合鴻勝風格)
+const COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#6366f1', '#8b5cf6', '#ec4899'];
 
+const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, logs }) => {
 
-const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  // 1. 計算統計數據
+  const stats = useMemo(() => {
+    // 今日日期字串 (格式 YYYY/MM/DD)
+    const todayStr = new Date().toLocaleDateString();
 
-  const totalCapacity = zones.reduce((acc, curr) => acc + parseInt(curr.limit.toString()), 0);
-  const currentCount = inventory.length;
+    const totalTanks = inventory.length;
+    // 計算今日進場 (Log 動作是 '進場' 且時間包含今日日期)
+    const inToday = logs.filter(l => l.action === '進場' && l.time.includes(todayStr)).length;
+    // 計算今日出場
+    const outToday = logs.filter(l => l.action === '出場' && l.time.includes(todayStr)).length;
 
-  const getZoneStats = (zoneId: string) => {
-    const items = inventory.filter((t) => t.zone === zoneId);
-    const displayedItems = items.filter(
-      (t) =>
-        t.id.toUpperCase().includes(searchTerm.toUpperCase()) ||
-        t.content.toUpperCase().includes(searchTerm.toUpperCase())
-    );
-    return { items, displayedItems, count: items.length };
-  };
+    return { totalTanks, inToday, outToday };
+  }, [inventory, logs]);
 
-  const chartData = zones.map(z => ({
-    name: z.name,
-    value: inventory.filter(t => t.zone === z.id).length
-  })).filter(d => d.value > 0);
+  // 2. 準備圖表數據 (計算各區域庫存數量)
+  const chartData = useMemo(() => {
+    // 如果沒有區域資料，回傳空陣列
+    if (zones.length === 0) return [];
 
-  const handleZoneClick = (zoneId: string) => {
-    setSelectedZoneId(zoneId);
-  };
+    const data = zones.map(z => {
+      const count = inventory.filter(i => i.zone === z.id).length;
+      return { name: z.name, value: count };
+    });
 
-  const selectedZone = selectedZoneId ? zones.find(z => z.id === selectedZoneId) || null : null;
-  const selectedZoneTanks = selectedZoneId ? inventory.filter(t => t.zone === selectedZoneId) : [];
+    // 過濾掉數量為 0 的區域，避免圖表顯示太多空白
+    return data.filter(d => d.value > 0);
+  }, [zones, inventory]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex flex-col justify-between">
-          <div className="text-slate-400 text-xs font-bold uppercase">總容量 (Total Capacity)</div>
-          <div className="text-3xl font-bold text-slate-700">{totalCapacity}</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex flex-col justify-between">
-          <div className="text-slate-400 text-xs font-bold uppercase">在庫數 (In Stock)</div>
-          <div className="text-3xl font-bold text-amber-600">{currentCount}</div>
+    <div className="max-w-7xl mx-auto space-y-6">
+
+      {/* --- 頂部統計卡片 --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* 卡片 1:在庫總數 */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center">
+          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-4">
+            <i className="fa-solid fa-layer-group text-xl"></i>
+          </div>
+          <div>
+            <p className="text-slate-500 text-sm font-bold">目前在庫總數</p>
+            <p className="text-3xl font-black text-slate-800">{stats.totalTanks}</p>
+          </div>
         </div>
 
-        {/* Simple Pie Chart Visualization */}
-        <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 col-span-1 md:col-span-2 flex items-center justify-center h-32 md:h-auto">
-          {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={30}
-                  outerRadius={40}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <RechartsTooltip />
-                <Legend iconSize={8} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ fontSize: '10px' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="text-xs text-slate-400">無資料</div>
-          )}
+        {/* 卡片 2:今日進場 */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center">
+          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 mr-4">
+            <i className="fa-solid fa-arrow-right-to-bracket text-xl"></i>
+          </div>
+          <div>
+            <p className="text-slate-500 text-sm font-bold">今日進場數</p>
+            <p className="text-3xl font-black text-slate-800">{stats.inToday}</p>
+          </div>
+        </div>
+
+        {/* 卡片 3:今日出場 */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 mr-4">
+            <i className="fa-solid fa-truck-fast text-xl"></i>
+          </div>
+          <div>
+            <p className="text-slate-500 text-sm font-bold">今日出場數</p>
+            <p className="text-3xl font-black text-slate-800">{stats.outToday}</p>
+          </div>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 flex items-center px-4">
-        <i className="fa-solid fa-search text-slate-300 mr-3"></i>
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full outline-none bg-transparent"
-          placeholder="搜尋槽號、內容物..."
-        />
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-      {/* 🔴 已移除：原本這裡有一段錯誤的 item.slot 程式碼 */}
+        {/* --- 左側：區域分佈圖表 --- */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <h3 className="font-bold text-slate-800 mb-4 flex items-center">
+            <i className="fa-solid fa-chart-pie text-amber-500 mr-2"></i>
+            區域庫存分佈
+          </h3>
 
-      {/* Zones Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {zones.map((zone) => {
-          const { items, displayedItems, count } = getZoneStats(zone.id);
-          const limit = parseInt(zone.limit.toString());
-          const pct = limit > 0 ? Math.round((count / limit) * 100) : 0;
-          const colorClass = pct >= 100 ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-blue-500';
-
-          return (
-            <div key={zone.id} className="bg-white border rounded-xl overflow-hidden shadow-sm flex flex-col h-[350px]">
-              <div
-                onClick={() => handleZoneClick(zone.id)}
-                className="p-3 bg-slate-50 border-b flex justify-between items-center shrink-0 cursor-pointer hover:bg-blue-50 transition group select-none"
-              >
-                <div className="font-bold text-slate-700 group-hover:text-blue-700 flex items-center gap-2">
-                  {zone.name}
-                  <i className="fa-solid fa-up-right-from-square text-xs text-slate-300 group-hover:text-blue-400"></i>
-                </div>
-                <span className="text-xs font-bold px-2 py-1 rounded bg-white border text-slate-500 group-hover:border-blue-200 group-hover:text-blue-600">
-                  {count}/{limit}
-                </span>
+          {/* 修改重點：增加高度至 h-80 (320px)，讓圖表有空間 */}
+          <div className="h-80 w-full">
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    // ★★★ 修改重點：使用百分比，並設小一點 ★★★
+                    innerRadius="40%"
+                    outerRadius="60%"
+                    fill="#8884d8"
+                    paddingAngle={5}
+                    dataKey="value"
+                    label // 加上標籤顯示數值
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend verticalAlign="middle" align="right" layout="vertical" />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                <i className="fa-solid fa-chart-simple text-4xl mb-2"></i>
+                <p>目前無庫存資料</p>
               </div>
+            )}
+          </div>
+        </div>
 
-              <div className="h-1 w-full bg-slate-200 shrink-0">
-                <div className={`h-full ${colorClass} transition-all duration-500`} style={{ width: `${Math.min(pct, 100)}%` }}></div>
-              </div>
-
-              <div className="p-2 space-y-1 overflow-y-auto flex-1 custom-scrollbar">
-                {displayedItems.length === 0 ? (
-                  <div className="text-center text-slate-300 py-4 text-xs">
-                    {searchTerm ? '無符合結果' : '空區域'}
+        {/* --- 右側：最新動態 (只顯示最新的 5 筆) --- */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <h3 className="font-bold text-slate-800 mb-4 flex items-center">
+            <i className="fa-solid fa-clock-rotate-left text-blue-500 mr-2"></i>
+            最新進出紀錄
+          </h3>
+          <div className="space-y-4">
+            {logs.slice(0, 5).map((log) => (
+              <div key={log.id} className="flex items-start border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                <div className={`w-2 h-2 mt-2 rounded-full mr-3 ${log.action === '進場' ? 'bg-green-500' :
+                    log.action === '出場' ? 'bg-red-500' : 'bg-blue-500'
+                  }`}></div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-slate-800">{log.tank}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${log.action === '進場' ? 'bg-green-100 text-green-700' :
+                        log.action === '出場' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                      {log.action}
+                    </span>
                   </div>
-                ) : (
-                  displayedItems.map((tank) => (
-                    <div
-                      key={tank.id}
-                      className="flex justify-between items-start text-sm border-b border-slate-100 py-2 last:border-0 hover:bg-slate-50 px-2 rounded transition"
-                    >
-                      <div className="flex-1">
-                        <div className="font-bold font-mono text-slate-700 text-base">{tank.id}</div>
-                        {/* 🟢 這裡才是正確顯示 Slot 的位置 */}
-                        {tank.slot && (
-                          <div className="text-xs text-blue-600 font-bold">
-                            📍 {tank.slot}
-                          </div>
-                        )}
-                        <div className="text-[11px] text-slate-400 my-0.5">
-                          <i className="fa-regular fa-clock mr-1"></i>
-                          {tank.time}
-                        </div>
-                        <div className="text-xs text-slate-500 font-bold truncate max-w-[120px]">
-                          {tank.content}
-                        </div>
-                        <div className="text-xs text-blue-600 font-bold mt-0.5">
-                          <i className="fa-solid fa-weight-hanging mr-1"></i>
-                          {Number(tank.weight).toLocaleString()} kg
-                          {tank.remark && (
-                            <i className="fa-solid fa-circle-info ml-1 text-slate-400" title={tank.remark}></i>
-                          )}
-                        </div>
-                      </div>
-                      {/* Move Out button removed */}
-                    </div>
-                  ))
-                )}
+                  <p className="text-xs text-slate-500 mb-1">{log.time}</p>
+                  <div className="text-xs text-slate-400">
+                    {log.zone} • {log.user}
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+            {logs.length === 0 && (
+              <p className="text-center text-slate-400 text-sm py-4">尚無紀錄</p>
+            )}
+          </div>
+        </div>
 
-      <ZoneModal
-        isOpen={!!selectedZone}
-        onClose={() => setSelectedZoneId(null)}
-        zone={selectedZone}
-        tanks={selectedZoneTanks}
-      // isAdmin and onMoveOut removed as they are no longer passed to Dashboard
-      />
+      </div>
     </div>
   );
 };
