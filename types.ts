@@ -64,13 +64,12 @@ export interface AllData {
   registry: RegistryItem[];
 }
 
-export type InventoryItem = Tank;
-
 export interface TankMaintenanceData {
   id: string;
   empty: number | string;
   content: string;
-  lastNet: number | string; // Note: api.ts returns lastNet, but naming might be inconsistent with RegistryItem
+  lastNet: number | string;
   lastTotal: number | string;
   lastHead: number | string;
+  zoneName?: string;
 }

@@ -2,11 +2,7 @@ import { supabase } from '../supabaseClient';
 import { AllData } from '../types';
 
 export const api = {
-<<<<<<< HEAD
-  // 1. 登入 (修正版)
-=======
   // 1. 登入 (Login)
->>>>>>> e033f4bd4dad122af691a3b42f2ead2c9392cfba
   login: async (user: string, pass: string) => {
     // 模擬網路延遲，讓使用者感覺有在運算
     await new Promise(r => setTimeout(r, 500));
@@ -19,13 +15,8 @@ export const api = {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-<<<<<<< HEAD
-        .eq('id', cleanUser) // 修正：移除 .toLowerCase()，支援大寫帳號如 C0664
+        .eq('id', cleanUser) // Support uppercase/lowercase depending on DB, but sending trimmed
         .eq('password', cleanPass)
-=======
-        .eq('id', user) // 移除 .toLowerCase()，支援大小寫
-        .eq('password', pass)
->>>>>>> e033f4bd4dad122af691a3b42f2ead2c9392cfba
         .single();
 
       if (error || !data) {
@@ -45,54 +36,18 @@ export const api = {
     }
   },
 
-<<<<<<< HEAD
-  // 新增：註冊功能 (配合新的 Login.tsx)
-  register: async (user: string, pass: string, name: string) => {
+  // 新增：註冊功能 (Register) - Merged from HEAD and Incoming
+  register: async (id: string, pass: string, name: string) => {
     try {
-      const cleanUser = user.trim();
+      const cleanId = id.trim();
       const cleanPass = pass.trim();
       const cleanName = name.trim();
 
-      // 1. 先檢查帳號是否重複
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', cleanUser)
-        .single();
-
-      if (existing) {
-        return { status: 'error', message: '此帳號已被使用' };
-      }
-
-      // 2. 寫入新帳號
-      const { error } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: cleanUser,
-            password: cleanPass,
-            name: cleanName,
-            role: 'view' // 預設權限為 view，之後可由管理員手動改 admin
-          }
-        ]);
-
-      if (error) {
-        console.error(error);
-        return { status: 'error', message: '註冊寫入失敗' };
-      }
-
-      return { status: 'success' };
-    } catch (e) {
-      return { status: 'error', message: '系統錯誤' };
-=======
-  // 🔴 新增：註冊功能 (Register)
-  register: async (id: string, pass: string, name: string) => {
-    try {
       // A. 檢查帳號是否已經存在
       const { data: existing } = await supabase
         .from('users')
         .select('id')
-        .eq('id', id)
+        .eq('id', cleanId)
         .single();
 
       if (existing) {
@@ -101,9 +56,9 @@ export const api = {
 
       // B. 新增帳號 (預設權限為 view)
       const { error } = await supabase.from('users').insert({
-        id: id,
-        password: pass,
-        name: name,
+        id: cleanId,
+        password: cleanPass,
+        name: cleanName,
         role: 'view' // 預設大家都是檢視者，需要管理員權限再去資料庫改
       });
 
@@ -112,7 +67,6 @@ export const api = {
 
     } catch (error: any) {
       return { status: 'error', message: error.message || '註冊失敗' };
->>>>>>> e033f4bd4dad122af691a3b42f2ead2c9392cfba
     }
   },
 
@@ -140,7 +94,7 @@ export const api = {
 
   // 3. 進場 / 移區
   gateIn: async (data: any) => {
-    const { id, content, zone, netWeight, remark, user, customTime, totalWeight, headWeight, emptyWeight, zoneName } = data;
+    const { id, content, zone, netWeight, remark, user, customTime, totalWeight, headWeight, emptyWeight, zoneName, slot } = data;
     const timeStr = customTime ? customTime.replace('T', ' ') : new Date().toLocaleString();
 
     try {
@@ -151,12 +105,9 @@ export const api = {
       }
 
       const { data: existingTank } = await supabase.from('inventory').select('*').eq('id', id).single();
-<<<<<<< HEAD
 
-=======
->>>>>>> e033f4bd4dad122af691a3b42f2ead2c9392cfba
       const { error: invError } = await supabase.from('inventory').upsert({
-        id, content, weight: netWeight, zone, time: timeStr, remark: remark || ''
+        id, content, weight: netWeight, zone, time: timeStr, remark: remark || '', slot: slot || '' // Added slot
       });
 
       if (invError) throw invError;
@@ -164,7 +115,7 @@ export const api = {
       const logAction = existingTank ? (existingTank.zone === zone ? '更新' : '移區') : '進場';
       await supabase.from('logs').insert({
         time: timeStr, tank: id, action: logAction, zone: zoneName, "user": user || 'Unknown',
-        content, weight: netWeight, total: totalWeight, head: headWeight, empty: emptyWeight, remark
+        content, weight: netWeight, total: totalWeight, head: headWeight, empty: emptyWeight, remark, slot: slot || ''
       });
 
       return { status: 'success', message: `槽車 ${id} 作業成功 (${logAction})` };
@@ -202,11 +153,7 @@ export const api = {
 
   // 6. 更新基本資料
   updateRegistryData: async (data: any) => {
-<<<<<<< HEAD
-    const { id, empty, content, total, head, remark, user } = data;
-=======
-    const { id, empty, content, total, head } = data;
->>>>>>> e033f4bd4dad122af691a3b42f2ead2c9392cfba
+    const { id, empty, content, total, head } = data; // use simpler destructuring from Incoming, remark/user not used in upsert
     try {
       await supabase.from('registry').upsert({ id, empty, content, "lastTotal": total, "lastHead": head });
       return { status: 'success', message: '基本資料更新成功' };
@@ -242,6 +189,7 @@ export const api = {
         lastNet: latestLog?.weight || 0,
         lastTotal: lastTotal,
         lastHead: lastHead,
+        zoneName: latestLog?.zone || '' // Add zoneName if possible from log to help auto-search
       };
 
       const history = (tankLogs || []).map((l: any) => ({
@@ -258,6 +206,7 @@ export const api = {
         lastNet: 0,
         lastTotal: '',
         lastHead: '',
+        zoneName: ''
       };
       return { status: 'success', tank, history: [] };
     }
