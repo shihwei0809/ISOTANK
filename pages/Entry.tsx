@@ -14,7 +14,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
   const [id, setId] = useState('');
   const [content, setContent] = useState('');
   const [zone, setZone] = useState('');
-  // const [slot, setSlot] = useState(''); // 修改：移除停車格狀態
 
   // 重量相關
   const [total, setTotal] = useState('');
@@ -42,19 +41,32 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     setNet(val > 0 ? val : 0);
   }, [total, head, empty]);
 
-  // 當輸入車號時，自動帶入歷史資料
-  const handleIdBlur = async () => {
-    if (!id) return;
-    // 呼叫 API 查詢該車號的歷史紀錄
-    const res = await api.getTankMaintenance(id);
-    if (res.status === 'success' && res.tank) {
-      // 自動填入：內容物、上次車頭重、上次空櫃重
-      // 注意：這裡不填總重，因為總重每次進場都不一樣
-      if (res.tank.content) setContent(res.tank.content);
-      if (res.tank.lastHead) setHead(String(res.tank.lastHead));
-      if (res.tank.empty) setEmpty(String(res.tank.empty));
-    }
-  };
+  // ★★★ 修改重點：即時查詢功能 (防抖 Debounce) ★★★
+  useEffect(() => {
+    // 設定一個計時器，當 id 改變時會等待 500ms
+    const timer = setTimeout(async () => {
+      // 排除空白或字數太少的情況
+      const searchId = id.trim();
+      if (!searchId || searchId.length < 2) return;
+
+      // 執行查詢 (這裡建議轉大寫查詢，提高命中率)
+      const res = await api.getTankMaintenance(searchId);
+      // 或是用 api.getTankMaintenance(searchId.toUpperCase()); 看您的需求
+
+      if (res.status === 'success' && res.tank) {
+        // 自動填入資料
+        if (res.tank.content) setContent(res.tank.content);
+        if (res.tank.lastHead) setHead(String(res.tank.lastHead));
+        if (res.tank.empty) setEmpty(String(res.tank.empty));
+
+        // 可以在這裡顯示一個小提示，讓使用者知道資料已自動帶入 (選用)
+        // console.log('歷史資料已自動帶入');
+      }
+    }, 500); // 延遲 0.5 秒，避免打字過程中頻繁查詢
+
+    // 清除計時器 (如果使用者在 0.5 秒內又打字，就取消上一次查詢，重新計時)
+    return () => clearTimeout(timer);
+  }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,32 +78,28 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     setLoading(true);
     setMsg({ type: '', text: '' });
 
-    // 找出區域名稱 (用於 Log 顯示)
     const currentZoneName = zones.find(z => z.id === zone)?.name || zone;
 
     const data = {
-      id: id.toUpperCase(), // 強制轉大寫
+      id: id.toUpperCase(), // 送出時強制轉大寫
       content,
       zone,
       zoneName: currentZoneName,
-      // slot, // 修改：移除 Slot 參數
       totalWeight: parseFloat(total) || 0,
       headWeight: parseFloat(head) || 0,
       emptyWeight: parseFloat(empty) || 0,
       netWeight: net,
       user,
-      customTime: new Date().toISOString() // 使用當下時間
+      customTime: new Date().toISOString()
     };
 
     const res = await api.gateIn(data);
 
     if (res.status === 'success') {
       setMsg({ type: 'success', text: res.message });
-      // 清空表單，保留部分不會變的資訊(如區域)方便連續輸入
       setId('');
       setTotal('');
-      // setContent(''); // 內容物通常會變，也可以不清空看需求
-      onRefresh(); // 通知上層重新讀取資料
+      onRefresh();
     } else {
       setMsg({ type: 'error', text: res.message });
     }
@@ -106,7 +114,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
           <h2 className="text-xl font-bold text-slate-800">槽車進場作業</h2>
         </div>
 
-        {/* 訊息提示區 */}
         {msg.text && (
           <div className={`p-4 mb-4 rounded-lg text-center font-bold ${msg.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}>
             {msg.text}
@@ -115,7 +122,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
 
-          {/* 進場時間 (唯讀，顯示當下) */}
           <div>
             <label className="block text-sm font-bold text-slate-600 mb-1">進場時間 (Time) *</label>
             <input
@@ -126,21 +132,19 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             />
           </div>
 
-          {/* 車號 */}
           <div>
             <label className="block text-sm font-bold text-slate-600 mb-1">車號 (Tank ID) *</label>
             <input
               type="text"
               value={id}
               onChange={(e) => setId(e.target.value)}
-              onBlur={handleIdBlur} // 離開焦點時查詢歷史
+              // onBlur 被移除，改由 useEffect 處理
               className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
               placeholder="例如: TNKU1234567"
               required
             />
           </div>
 
-          {/* 內容物 */}
           <div>
             <label className="block text-sm font-bold text-slate-600 mb-1">內容物 (Content)</label>
             <input
@@ -152,7 +156,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             />
           </div>
 
-          {/* 修改：只保留區域 (Zone)，移除 Slot，並讓 Select 寬度為 w-full */}
           <div>
             <label className="block text-sm font-bold text-slate-600 mb-1">區域 (Zone)</label>
             <select
@@ -168,7 +171,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             </select>
           </div>
 
-          {/* 重量輸入區 (兩兩一排) */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold text-slate-600 mb-1">總重 (Total)</label>
@@ -203,7 +205,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
             />
           </div>
 
-          {/* 淨重顯示區 */}
           <div className="bg-blue-50 p-4 rounded-lg flex justify-between items-center border border-blue-100">
             <span className="text-blue-800 font-bold">淨重 (Net Weight):</span>
             <span className="text-2xl font-bold text-blue-600">{net} <span className="text-sm">kg</span></span>
