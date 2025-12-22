@@ -41,17 +41,13 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     setNet(val > 0 ? val : 0);
   }, [total, head, empty]);
 
-  // ★★★ 修改重點：即時查詢功能 (防抖 Debounce) ★★★
+  // ★★★ 即時查詢功能 (已修正：加入總重 total 的自動帶入) ★★★
   useEffect(() => {
-    // 設定一個計時器，當 id 改變時會等待 500ms
     const timer = setTimeout(async () => {
-      // 排除空白或字數太少的情況
       const searchId = id.trim();
       if (!searchId || searchId.length < 2) return;
 
-      // 執行查詢 (這裡建議轉大寫查詢，提高命中率)
       const res = await api.getTankMaintenance(searchId);
-      // 或是用 api.getTankMaintenance(searchId.toUpperCase()); 看您的需求
 
       if (res.status === 'success' && res.tank) {
         // 自動填入資料
@@ -59,12 +55,11 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
         if (res.tank.lastHead) setHead(String(res.tank.lastHead));
         if (res.tank.empty) setEmpty(String(res.tank.empty));
 
-        // 可以在這裡顯示一個小提示，讓使用者知道資料已自動帶入 (選用)
-        // console.log('歷史資料已自動帶入');
+        // --- 新增這行：如果有上次總重，也自動帶入 ---
+        if (res.tank.lastTotal) setTotal(String(res.tank.lastTotal));
       }
-    }, 500); // 延遲 0.5 秒，避免打字過程中頻繁查詢
+    }, 500); // 延遲 0.5 秒
 
-    // 清除計時器 (如果使用者在 0.5 秒內又打字，就取消上一次查詢，重新計時)
     return () => clearTimeout(timer);
   }, [id]);
 
@@ -81,7 +76,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     const currentZoneName = zones.find(z => z.id === zone)?.name || zone;
 
     const data = {
-      id: id.toUpperCase(), // 送出時強制轉大寫
+      id: id.toUpperCase(),
       content,
       zone,
       zoneName: currentZoneName,
@@ -98,7 +93,8 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     if (res.status === 'success') {
       setMsg({ type: 'success', text: res.message });
       setId('');
-      setTotal('');
+      setTotal(''); // 進場成功後清空，避免混淆下一筆
+      // setContent(''); 
       onRefresh();
     } else {
       setMsg({ type: 'error', text: res.message });
@@ -138,7 +134,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
               type="text"
               value={id}
               onChange={(e) => setId(e.target.value)}
-              // onBlur 被移除，改由 useEffect 處理
               className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
               placeholder="例如: TNKU1234567"
               required

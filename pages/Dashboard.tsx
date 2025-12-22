@@ -64,7 +64,7 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
                   cx="50%"
                   cy="50%"
                   innerRadius={30}
-                  outerRadius={50}
+                  outerRadius={40}
                   paddingAngle={5}
                   dataKey="value"
                 >
