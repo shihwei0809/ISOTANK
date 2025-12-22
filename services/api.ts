@@ -9,7 +9,7 @@ export const api = {
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user.toLowerCase())
+        .eq('id', user)
         .eq('password', pass)
         .single();
 
