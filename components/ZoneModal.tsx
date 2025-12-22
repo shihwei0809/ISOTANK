@@ -14,7 +14,7 @@ const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks, isA
   if (!isOpen || !zone) return null;
 
   const count = tanks.length;
-  const utilization = Math.round((count / zone.limit) * 100);
+  const utilization = Math.round((count / parseInt(zone.limit.toString())) * 100);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -22,6 +22,7 @@ const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks, isA
 
       <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
         <div className="relative transform overflow-hidden rounded-xl bg-white text-left shadow-xl transition-all sm:my-8 w-full max-w-4xl flex flex-col max-h-[90vh]">
+          {/* Header */}
           <div className="bg-slate-50 px-4 py-4 sm:px-6 border-b border-slate-200 flex justify-between items-center shrink-0">
             <div>
               <h3 className="text-xl font-bold leading-6 text-slate-900">{zone.name} ({zone.id})</h3>
@@ -38,6 +39,7 @@ const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks, isA
             </button>
           </div>
 
+          {/* Body */}
           <div className="px-4 py-4 sm:p-6 overflow-y-auto flex-1 bg-slate-50/50">
             {tanks.length === 0 ? (
               <div className="text-center text-slate-400 py-10">此區域無槽車</div>
@@ -47,9 +49,21 @@ const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks, isA
                   <div key={tank.id} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between group">
                     <div>
                       <div className="flex justify-between items-start mb-2">
-                        <div className="font-bold text-lg font-mono text-slate-800">{tank.id}</div>
-                        <div className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full">{tank.time.split(' ')[0]}</div>
+                        {/* 🟢 修改這裡：加入一個 div 包覆車號與儲位 */}
+                        <div>
+                          <div className="font-bold text-lg font-mono text-slate-800">{tank.id}</div>
+                          {/* 🟢 新增：如果有 slot 資料就顯示 */}
+                          {tank.slot && (
+                            <div className="text-xs text-blue-600 font-bold mt-1">
+                              📍 {tank.slot}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs bg-slate-100 text-slate-500 px-2 py-1 rounded-full">
+                          {tank.time?.split(' ')[0]}
+                        </div>
                       </div>
+
                       <div className="space-y-1">
                         <div className="flex items-center text-sm text-slate-600">
                           <i className="fa-solid fa-flask w-6 text-center text-slate-400"></i>
@@ -83,6 +97,7 @@ const ZoneModal: React.FC<ZoneModalProps> = ({ isOpen, onClose, zone, tanks, isA
             )}
           </div>
 
+          {/* Footer */}
           <div className="bg-white px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 border-t border-slate-100 shrink-0">
             <button
               type="button"

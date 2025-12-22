@@ -17,7 +17,10 @@ export interface Tank {
   zoneName?: string;
   time: string;
   remark?: string;
+  slot?: string;
 }
+
+export type InventoryItem = Tank;
 
 export interface LogEntry {
   id: number;
@@ -32,6 +35,7 @@ export interface LogEntry {
   head?: number | string;
   empty?: number | string;
   remark?: string;
+  slot?: string;
 }
 
 export interface RegistryItem {
