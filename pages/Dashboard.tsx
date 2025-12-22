@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
-import { Zone, InventoryItem, LogItem } from '../types';
+import { Zone, InventoryItem, LogEntry } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 interface DashboardProps {
   zones: Zone[];
   inventory: InventoryItem[];
-  logs: LogItem[];
+  logs: LogEntry[];
 }
 
 // 定義圖表顏色 (藍綠色系配合鴻勝風格)
@@ -133,13 +133,13 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, logs }) => {
             {logs.slice(0, 5).map((log) => (
               <div key={log.id} className="flex items-start border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                 <div className={`w-2 h-2 mt-2 rounded-full mr-3 ${log.action === '進場' ? 'bg-green-500' :
-                    log.action === '出場' ? 'bg-red-500' : 'bg-blue-500'
+                  log.action === '出場' ? 'bg-red-500' : 'bg-blue-500'
                   }`}></div>
                 <div className="flex-1">
                   <div className="flex justify-between items-center mb-1">
                     <span className="font-bold text-slate-800">{log.tank}</span>
                     <span className={`text-xs px-2 py-0.5 rounded ${log.action === '進場' ? 'bg-green-100 text-green-700' :
-                        log.action === '出場' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                      log.action === '出場' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
                       }`}>
                       {log.action}
                     </span>
