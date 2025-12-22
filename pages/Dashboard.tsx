@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { Zone, InventoryItem, LogEntry } from '../types';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 interface DashboardProps {
   zones: Zone[];
@@ -8,175 +7,157 @@ interface DashboardProps {
   logs: LogEntry[];
 }
 
-// 顏色設定
-const COLORS = ['#0ea5e9', '#f59e0b', '#10b981', '#6366f1', '#8b5cf6', '#ec4899'];
-
-const Dashboard: React.FC<DashboardProps> = ({ zones, inventory, logs }) => {
+const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. 計算數據
+  // 1. 計算全場統計
   const stats = useMemo(() => {
     const totalTanks = inventory.length;
-    // 假設總容量 (如果沒有後端數據，這裡先暫時設定為 區域數 * 20 或固定數值，以還原介面為主)
-    const totalCapacity = 250;
-
+    const totalCapacity = 214; // 依照您的截圖範例設定，或是您可以設成 zones.length * 50 之類的
     return { totalTanks, totalCapacity };
   }, [inventory]);
 
-  // 2. 圖表數據
-  const chartData = useMemo(() => {
-    if (zones.length === 0) return [];
-    const data = zones.map(z => {
-      const count = inventory.filter(i => i.zone === z.id).length;
-      return { name: z.name, value: count };
-    });
-    return data.filter(d => d.value > 0);
-  }, [zones, inventory]);
-
-  // 3. 過濾搜尋 (如果有輸入車號或內容物)
+  // 2. 搜尋過濾邏輯
   const filteredInventory = useMemo(() => {
     if (!searchTerm) return inventory;
+    const lowerTerm = searchTerm.toUpperCase(); // 轉大寫比對
     return inventory.filter(i =>
-      i.id.includes(searchTerm.toUpperCase()) ||
-      (i.content && i.content.includes(searchTerm))
+      i.id.includes(lowerTerm) ||
+      (i.content && i.content.toUpperCase().includes(lowerTerm))
     );
   }, [inventory, searchTerm]);
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-6">
+  // 3. 處理「移出」點擊 (目前僅做視覺呈現，防止誤觸)
+  const handleQuickExit = (tankId: string) => {
+    alert(`若要將 ${tankId} 移出，請至「進場/出場作業」頁面執行，以確保紀錄完整。`);
+  };
 
-      {/* 標題區 */}
-      <div className="flex justify-between items-center">
+  return (
+    <div className="max-w-[1600px] mx-auto space-y-6 pb-10">
+
+      {/* --- 頂部標題與按鈕 (依照截圖右上角有個深色 + 號) --- */}
+      <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold text-slate-800">場站總覽</h2>
-        <span className="text-xs text-slate-400">
-          <i className="fa-solid fa-rotate-right mr-1"></i>
-          重新整理
-        </span>
+        <button className="w-10 h-10 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition shadow-lg flex items-center justify-center">
+          <i className="fa-solid fa-plus"></i>
+        </button>
       </div>
 
-      {/* --- 核心儀表板區塊 (還原三欄式佈局) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* --- 統計數據與搜尋區 (三欄式) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* 卡片 1: 總容量 (仿照舊版樣式) */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center h-40">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">總容量 (TOTAL CAPACITY)</p>
-          <div className="flex items-baseline">
-            <span className="text-5xl font-bold text-slate-800">{stats.totalCapacity}</span>
-            <span className="ml-2 text-sm text-slate-400">slots</span>
-          </div>
+        {/* 卡片 1: 總容量 */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">總容量</p>
+          <p className="text-5xl font-black text-slate-800">{stats.totalCapacity}</p>
         </div>
 
         {/* 卡片 2: 在庫數 */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col justify-center h-40">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">在庫數 (IN STOCK)</p>
-          <div className="flex items-baseline">
-            <span className="text-5xl font-bold text-amber-500">{stats.totalTanks}</span>
-            <span className="ml-2 text-sm text-slate-400">tanks</span>
-          </div>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center">
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">在庫數</p>
+          <p className="text-5xl font-black text-amber-500">{stats.totalTanks}</p>
         </div>
 
-        {/* 卡片 3: 區域圓餅圖 (縮小版，放在右側) */}
-        <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100 h-40 flex items-center overflow-hidden">
-          <div className="flex-1 h-full relative">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={35} // 調整較小的內徑
-                    outerRadius={55} // 調整較小的外徑以放入卡片
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Legend
-                    layout="vertical"
-                    verticalAlign="middle"
-                    align="right"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: '10px', paddingRight: '10px' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-slate-300 text-xs">
-                無數據
-              </div>
-            )}
-          </div>
+        {/* 卡片 3: 搜尋列 */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center">
+          <i className="fa-solid fa-magnifying-glass text-slate-300 text-xl mr-4"></i>
+          <input
+            type="text"
+            placeholder="搜尋槽號、內容物..."
+            className="w-full h-full outline-none text-lg text-slate-600 placeholder-slate-300"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
-      {/* --- 搜尋列 (仿照舊版) --- */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center">
-        <i className="fa-solid fa-magnifying-glass text-slate-300 ml-2 mr-4"></i>
-        <input
-          type="text"
-          placeholder="搜尋槽號、內容物..."
-          className="flex-1 outline-none text-slate-600 placeholder-slate-300"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
+      {/* --- 區域看板 (Kanban View) --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+        {zones.map((zone) => {
+          // 篩選出該區域內的庫存 (且符合搜尋條件)
+          const zoneItems = filteredInventory.filter(i => i.zone === zone.id);
+          // 模擬容量 (假設每個區域容量 35，這可以依需求改)
+          const zoneCapacity = 35;
+          const isFull = zoneItems.length >= zoneCapacity;
 
-      {/* --- 下方：搜尋結果或最新紀錄 --- */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-          <h3 className="font-bold text-slate-700">
-            {searchTerm ? '搜尋結果' : '最新進出紀錄'}
-          </h3>
-          <span className="text-xs text-slate-400">顯示最近 5 筆</span>
-        </div>
+          // 計算進度條顏色
+          const progressPercent = (zoneItems.length / zoneCapacity) * 100;
+          let progressColor = 'bg-blue-500';
+          if (progressPercent > 80) progressColor = 'bg-amber-500';
+          if (progressPercent >= 100) progressColor = 'bg-red-500';
 
-        <div className="divide-y divide-slate-100">
-          {(searchTerm ? filteredInventory.slice(0, 5) : logs.slice(0, 5)).map((item: any, idx) => {
-            // 判斷是 InventoryItem 還是 LogItem
-            const isLog = 'action' in item;
-            const id = isLog ? item.tank : item.id;
-            const desc = isLog ? `${item.action} - ${item.zone}` : `${item.zone} - ${item.content || '空桶'}`;
-            const time = isLog ? item.time : item.time || '在庫中';
+          return (
+            <div key={zone.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col max-h-[800px]">
 
-            return (
-              <div key={idx} className="p-4 flex items-center hover:bg-slate-50 transition">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center mr-4 
-                  ${isLog
-                    ? (item.action === '進場' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600')
-                    : 'bg-blue-100 text-blue-600'
-                  }`}>
-                  <i className={`fa-solid ${isLog ? (item.action === '進場' ? 'fa-arrow-right-to-bracket' : 'fa-truck-fast') : 'fa-cube'}`}></i>
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between">
-                    <span className="font-bold text-slate-800">{id}</span>
-                    <span className="text-xs text-slate-400">{time}</span>
+              {/* 區域標題列 */}
+              <div className="p-5 border-b border-slate-100 sticky top-0 bg-white z-10 rounded-t-2xl">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-bold text-lg text-slate-800">{zone.name}</h3>
+                    <i className="fa-solid fa-arrow-up-right-from-square text-slate-300 text-xs cursor-pointer hover:text-blue-500"></i>
                   </div>
-                  <p className="text-sm text-slate-500">{desc}</p>
-                </div>
-                {/* 如果是在庫搜尋，顯示狀態標籤 */}
-                {!isLog && (
-                  <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs rounded-full font-bold">
-                    IN STOCK
+                  <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                    {zoneItems.length} / {zoneCapacity}
                   </span>
+                </div>
+                {/* 進度條 */}
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${progressColor} transition-all duration-500`}
+                    style={{ width: `${Math.min(progressPercent, 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* 該區域的槽車列表 (可捲動) */}
+              <div className="p-4 overflow-y-auto space-y-3 bg-slate-50/50 flex-1 custom-scrollbar">
+                {zoneItems.length > 0 ? (
+                  zoneItems.map((item) => (
+                    <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition group">
+
+                      {/* 第一行：車號 與 移出按鈕 */}
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="font-bold text-slate-800 text-lg">{item.id}</span>
+                        <button
+                          onClick={() => handleQuickExit(item.id)}
+                          className="text-xs text-red-400 bg-red-50 px-2 py-1 rounded border border-red-100 hover:bg-red-500 hover:text-white transition"
+                        >
+                          移出
+                        </button>
+                      </div>
+
+                      {/* 第二行：時間 */}
+                      <div className="flex items-center text-xs text-slate-400 mb-2">
+                        <i className="fa-regular fa-clock mr-1.5"></i>
+                        {item.time?.split('T')[0] || 'Unknown Date'}
+                        <span className="ml-1">{item.time?.split('T')[1]?.split('.')[0] || ''}</span>
+                      </div>
+
+                      {/* 第三行：內容物 */}
+                      <div className="font-bold text-slate-700 text-sm mb-2 truncate">
+                        {item.content || '無內容物'}
+                      </div>
+
+                      {/* 第四行：重量 */}
+                      <div className="flex items-center text-blue-600 font-bold text-sm">
+                        <i className="fa-solid fa-weight-hanging mr-2"></i>
+                        {item.weight ? item.weight.toLocaleString() : 0} <span className="text-xs ml-1">kg</span>
+                      </div>
+
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-slate-400 text-sm">
+                    <i className="fa-solid fa-box-open text-2xl mb-2 opacity-50"></i>
+                    <p>此區域無庫存</p>
+                  </div>
                 )}
               </div>
-            );
-          })}
-
-          {((searchTerm && filteredInventory.length === 0) || (!searchTerm && logs.length === 0)) && (
-            <div className="p-8 text-center text-slate-400">
-              尚無資料
             </div>
-          )}
-        </div>
+          );
+        })}
       </div>
+
     </div>
   );
 };
