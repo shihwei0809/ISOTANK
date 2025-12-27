@@ -29,7 +29,8 @@ export const api = {
         status: 'success',
         user: data.id,
         name: data.name,
-        role: data.role as 'admin' | 'view'
+        role: data.role as 'admin' | 'view',
+        isSuper: data.is_super // 讀取 DB 中的 is_super 欄位
       };
     } catch (e) {
       return { status: 'error', message: '登入驗證失敗' };
@@ -209,6 +210,36 @@ export const api = {
         zoneName: ''
       };
       return { status: 'success', tank, history: [] };
+    }
+  },
+
+  // 8. 編輯紀錄
+  editLog: async (logId: number, newData: any) => {
+    try {
+      const { error } = await supabase
+        .from('logs')
+        .update(newData)
+        .eq('id', logId);
+
+      if (error) throw error;
+      return { status: 'success', message: '紀錄已更新' };
+    } catch (e: any) {
+      return { status: 'error', message: e.message || '更新失敗' };
+    }
+  },
+
+  // 9. 刪除紀錄
+  deleteLog: async (logId: number) => {
+    try {
+      const { error } = await supabase
+        .from('logs')
+        .delete()
+        .eq('id', logId);
+
+      if (error) throw error;
+      return { status: 'success', message: '紀錄已刪除' };
+    } catch (e: any) {
+      return { status: 'error', message: e.message || '刪除失敗' };
     }
   }
 };

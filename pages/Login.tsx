@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../services/api';
 
 interface LoginProps {
-  onLogin: (user: string, role: 'admin' | 'view') => void;
+  onLogin: (user: string, role: 'admin' | 'view', isSuper?: boolean) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {

@@ -6,10 +6,10 @@ import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Weight from './pages/Weight';
 import { api } from './services/api';
-import { AllData } from './types';
+import { AllData, User } from './types';
 
 function App() {
-  const [user, setUser] = useState<{ id: string; role: 'admin' | 'view' } | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [page, setPage] = useState('dashboard');
   const [data, setData] = useState<AllData>({
     zones: [],
@@ -20,9 +20,10 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   // 登入處理
-  const handleLogin = (userId: string, role: 'admin' | 'view') => {
-    setUser({ id: userId, role });
+  const handleLogin = (userId: string, role: 'admin' | 'view', isSuper?: boolean) => {
+    setUser({ id: userId, role, isSuper });
     loadData(); // 登入後立即讀取資料
+    resetIdleTimer();
   };
 
   const handleLogout = () => {
@@ -31,20 +32,48 @@ function App() {
   };
 
   // 讀取所有資料
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     const res = await api.read();
     setData(res);
     setLoading(false);
   };
 
-  // 定時重整 (例如每 30 秒)
+  // 定時重整 (每 30 秒靜音更新)
   useEffect(() => {
     if (user) {
-      const interval = setInterval(loadData, 30000);
+      const interval = setInterval(() => loadData(true), 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  // 閒置登出邏輯 (10分鐘)
+  useEffect(() => {
+    if (!user) return;
+
+    const EVENTS = ['mousemove', 'keydown', 'click', 'scroll'];
+    const handleActivity = () => {
+      localStorage.setItem('lastActivity', Date.now().toString());
+    };
+
+    EVENTS.forEach(event => window.addEventListener(event, handleActivity));
+    localStorage.setItem('lastActivity', Date.now().toString());
+
+    const checkIdle = setInterval(() => {
+      const lastActivity = parseInt(localStorage.getItem('lastActivity') || '0', 10);
+      if (Date.now() - lastActivity > 600000) { // 10 mins
+        handleLogout();
+        alert('系統閒置過久，已自動登出');
+      }
+    }, 10000);
+
+    return () => {
+      EVENTS.forEach(event => window.removeEventListener(event, handleActivity));
+      clearInterval(checkIdle);
+    };
+  }, [user]);
+
+  const resetIdleTimer = () => localStorage.setItem('lastActivity', Date.now().toString());
 
   // 如果未登入，顯示登入頁面
   if (!user) {
@@ -135,7 +164,7 @@ function App() {
             {menuItems.find(i => i.id === page)?.label}
           </h1>
           <button
-            onClick={loadData}
+            onClick={() => loadData(false)}
             disabled={loading}
             className="text-slate-400 hover:text-amber-600 transition flex items-center space-x-2 text-sm font-medium"
           >
@@ -147,10 +176,10 @@ function App() {
         {/* 頁面內容路由 */}
         <div className="p-8">
           {page === 'dashboard' && <Dashboard zones={data.zones} inventory={data.inventory} logs={data.logs} />}
-          {page === 'entry' && <Entry zones={data.zones} inventory={data.inventory} onRefresh={loadData} user={user.id} />}
-          {page === 'weight' && <Weight registry={data.registry} onRefresh={loadData} user={user.id} zones={data.zones} isAdmin={user.role === 'admin'} />}
-          {page === 'logs' && <Logs logs={data.logs} />}
-          {page === 'settings' && <Settings zones={data.zones} onSave={api.updateSettings} onRefresh={loadData} />}
+          {page === 'entry' && <Entry zones={data.zones} inventory={data.inventory} onRefresh={() => loadData(false)} user={user.id} />}
+          {page === 'weight' && <Weight registry={data.registry} onRefresh={() => loadData(false)} user={user.id} zones={data.zones} isAdmin={user.role === 'admin'} />}
+          {page === 'logs' && <Logs logs={data.logs} user={user} />}
+          {page === 'settings' && <Settings zones={data.zones} onSave={api.updateSettings} onRefresh={() => loadData(false)} />}
         </div>
       </main>
     </div>

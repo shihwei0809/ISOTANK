@@ -1,12 +1,15 @@
 export interface User {
-  username: string;
+  id: string;
+  name?: string;
   role: 'admin' | 'view';
+  isSuper?: boolean;
 }
 
 export interface Zone {
   id: string;
   name: string;
   limit: number;
+  capacity?: number;
 }
 
 export interface Tank {
