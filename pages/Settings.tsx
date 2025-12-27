@@ -12,6 +12,7 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // 深拷貝以避免直接修改 props
     setLocalZones(JSON.parse(JSON.stringify(zones)));
   }, [zones]);
 
@@ -23,9 +24,9 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
   };
 
   const handleAdd = () => {
-    const newId = `Z${(localZones.length + 1).toString().padStart(2, '0')}`;
-    // ★ 修改：這裡使用 limit
-    setLocalZones([...localZones, { id: newId, name: 'New Zone', limit: 35 }]);
+    const newId = `Z-${(localZones.length + 1).toString().padStart(2, '0')}`;
+    // ★ 修正：新增時使用 limit 屬性
+    setLocalZones([...localZones, { id: newId, name: '新區域', limit: 35 }]);
   };
 
   const handleRemove = (index: number) => {
@@ -53,7 +54,7 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
   };
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-fade-in">
 
         <div className="flex justify-between mb-6 items-center border-b border-slate-100 pb-4">
@@ -69,13 +70,15 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
           </button>
         </div>
 
+        {/* 表頭 */}
         <div className="bg-slate-50 p-3 rounded-t-xl grid grid-cols-12 gap-4 text-xs font-bold text-slate-500 uppercase tracking-wider border border-slate-200 border-b-0">
           <div className="col-span-3">區域代號 (ID)</div>
           <div className="col-span-5">區域名稱 (Name)</div>
-          <div className="col-span-3">最大容量 (Capacity)</div>
+          <div className="col-span-3">最大容量 (Limit)</div>
           <div className="col-span-1 text-center">刪除</div>
         </div>
 
+        {/* 列表內容 */}
         <div className="border border-slate-200 rounded-b-xl overflow-hidden divide-y divide-slate-100 bg-white">
           {localZones.map((z, i) => (
             <div key={i} className="grid grid-cols-12 gap-4 items-center p-3 hover:bg-slate-50 transition">
@@ -102,7 +105,7 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
                   <input
                     type="number"
                     className="w-full border border-slate-200 rounded px-3 py-2 text-sm text-center font-bold text-slate-700 focus:border-blue-500 outline-none transition"
-                    // ★ 修改：使用 limit
+                    // ★ 修正：綁定 limit
                     value={z.limit || 35}
                     onChange={(e) => handleChange(i, 'limit', parseInt(e.target.value))}
                   />
