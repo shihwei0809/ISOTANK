@@ -3,7 +3,7 @@ import { LogEntry } from '../types';
 
 interface LogsProps {
   logs: LogEntry[];
-  isSuper: boolean; // 接收權限參數
+  isSuper: boolean;
   onDelete?: (id: string) => void;
   onEdit?: (entry: LogEntry) => void;
 }
@@ -11,79 +11,118 @@ interface LogsProps {
 const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
   const [search, setSearch] = useState('');
 
-  // 排序：時間新 -> 舊
-  const displayLogs = logs.slice().sort((a, b) => {
+  // ★ 新增：分頁狀態
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50); // 預設 50 筆
+
+  // 1. 先進行篩選與排序
+  const filteredLogs = logs.slice().sort((a, b) => {
     return new Date(b.time).getTime() - new Date(a.time).getTime();
   }).filter(l =>
     search === '' ||
     `${l.time} ${l.tank} ${l.action} ${l.zone} ${l.slot || ''} ${l.content} ${l.user} ${l.remark}`.toUpperCase().includes(search.toUpperCase())
   );
 
-  // 處理刪除 (帶防呆確認)
-  const handleDelete = (id: string) => { // 注意：這裡 id 可能是 number (Supabase) 或 string，請依實際情況調整
-    if (confirm('警告：確定要刪除這筆紀錄嗎？此動作無法復原。')) {
+  // 2. 計算分頁數據
+  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentLogs = filteredLogs.slice(startIndex, startIndex + itemsPerPage);
+
+  // 處理刪除
+  const handleDelete = (id: string) => {
+    if (window.confirm('警告：確定要刪除這筆紀錄嗎？此動作無法復原。')) {
       if (onDelete) onDelete(id);
     }
+  };
+
+  // 處理頁碼變更
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      // 自動捲動回頂部
+      document.querySelector('.overflow-x-auto')?.scrollTo(0, 0);
+    }
+  };
+
+  // 搜尋時重置回第一頁
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setCurrentPage(1);
   };
 
   return (
     <div className="p-4 md:p-8 max-w-[1920px] mx-auto animate-fade-in">
 
-      {/* 標題與搜尋 */}
+      {/* 頂部工具列 */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">歷史紀錄</h2>
+          <h2 className="text-2xl font-bold text-slate-800">進出紀錄</h2>
           <p className="text-slate-500 text-sm">
             System Logs & History
-            {/* 顯示偵錯用標籤，確認 isSuper 狀態 */}
             {isSuper && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-xs ml-2 font-bold border border-red-200">SUPER USER</span>}
           </p>
         </div>
 
-        <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center w-full md:w-96">
-          <i className="fa-solid fa-magnifying-glass text-slate-300 mr-3"></i>
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full outline-none bg-transparent text-slate-600 placeholder-slate-300"
-            placeholder="搜尋任意關鍵字..."
-          />
+        <div className="flex gap-3 w-full md:w-auto">
+          {/* 搜尋框 */}
+          <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center flex-1 md:w-80">
+            <i className="fa-solid fa-magnifying-glass text-slate-300 mr-3"></i>
+            <input
+              type="text"
+              value={search}
+              onChange={e => handleSearchChange(e.target.value)}
+              className="w-full outline-none bg-transparent text-slate-600 placeholder-slate-300"
+              placeholder="搜尋關鍵字..."
+            />
+          </div>
+
+          {/* ★ 新增：每頁筆數選擇 */}
+          <div className="bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center">
+            <span className="text-xs text-slate-400 font-bold mr-2 whitespace-nowrap">顯示</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+              className="outline-none bg-transparent font-bold text-slate-700 cursor-pointer"
+            >
+              <option value={50}>50 筆</option>
+              <option value={100}>100 筆</option>
+              <option value={200}>200 筆</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px]">
+        <div className="overflow-x-auto flex-1">
           <table className="w-full text-sm text-left whitespace-nowrap">
-            <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs tracking-wider">
+            <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs tracking-wider sticky top-0 z-10 shadow-sm">
               <tr>
-                <th className="p-4">時間 (Time)</th>
-                <th className="p-4">槽號 (Tank ID)</th>
-                <th className="p-4">動作 (Action)</th>
-                <th className="p-4">內容物 (Content)</th>
-                <th className="p-4">區域 (Zone)</th>
-                <th className="p-4">儲位 (Slot)</th>
-                <th className="p-4 text-right">淨重 (Net)</th>
-                <th className="p-4">備註 (Remark)</th>
-                <th className="p-4">人員 (User)</th>
-                {/* ★ 只有 Super User 才會看到管理欄位標題 */}
-                {isSuper && <th className="p-4 text-center bg-red-50 text-red-500">管理 (Admin)</th>}
+                <th className="p-4 bg-slate-50">時間 (Time)</th>
+                <th className="p-4 bg-slate-50">槽號 (Tank ID)</th>
+                <th className="p-4 bg-slate-50">動作 (Action)</th>
+                <th className="p-4 bg-slate-50">內容物 (Content)</th>
+                <th className="p-4 bg-slate-50">區域 (Zone)</th>
+                <th className="p-4 bg-slate-50">儲位 (Slot)</th>
+                <th className="p-4 bg-slate-50 text-right">淨重 (Net)</th>
+                <th className="p-4 bg-slate-50">備註 (Remark)</th>
+                <th className="p-4 bg-slate-50">人員 (User)</th>
+                {isSuper && <th className="p-4 text-center bg-red-50 text-red-500 border-b-red-100">管理</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {displayLogs.length === 0 ? (
+              {currentLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={isSuper ? 10 : 9} className="p-12 text-center flex flex-col items-center justify-center text-slate-400">
+                  <td colSpan={isSuper ? 10 : 9} className="p-12 text-center flex flex-col items-center justify-center text-slate-400 h-64">
                     <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
                     <span>查無符合紀錄</span>
                   </td>
                 </tr>
               ) : (
-                displayLogs.map(l => (
-                  <tr key={l.id} className="hover:bg-slate-50/80 transition group">
+                currentLogs.map(l => (
+                  <tr key={l.id || Math.random()} className="hover:bg-slate-50/80 transition group">
                     <td className="p-4 text-slate-500 text-xs">
-                      <div className="font-bold text-slate-700">{l.time.split('T')[0]}</div>
-                      <div className="scale-90 origin-left opacity-70">{l.time.split('T')[1]?.substring(0, 5)}</div>
+                      <div className="font-bold text-slate-700">{l.time.split(' ')[0]}</div>
+                      <div className="scale-90 origin-left opacity-70">{l.time.split(' ')[1]?.substring(0, 5)}</div>
                     </td>
                     <td className="p-4 font-bold font-mono text-slate-700 text-base">{l.tank}</td>
                     <td className="p-4">
@@ -117,10 +156,10 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
                       </div>
                     </td>
 
-                    {/* ★ 只有 Super User 才會看到按鈕 */}
+                    {/* 按鈕區域 */}
                     {isSuper && (
                       <td className="p-4 text-center">
-                        <div className="flex justify-center items-center gap-2">
+                        <div className="flex justify-center items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => onEdit && onEdit(l)}
                             className="w-8 h-8 flex items-center justify-center rounded bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white transition"
@@ -129,7 +168,7 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
                             <i className="fa-solid fa-pen"></i>
                           </button>
                           <button
-                            onClick={() => l.id && handleDelete(String(l.id))} // 轉型確保安全
+                            onClick={() => l.id && handleDelete(String(l.id))}
                             className="w-8 h-8 flex items-center justify-center rounded bg-red-50 text-red-600 hover:bg-red-500 hover:text-white transition"
                             title="刪除紀錄"
                           >
@@ -138,13 +177,43 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
                         </div>
                       </td>
                     )}
-
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
+
+        {/* ★ 新增：底部頁碼控制區 */}
+        {filteredLogs.length > 0 && (
+          <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="text-xs text-slate-500 font-bold">
+              顯示 {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredLogs.length)} 筆，共 {filteredLogs.length} 筆
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 rounded bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <i className="fa-solid fa-chevron-left"></i>
+              </button>
+
+              <span className="text-sm font-bold text-slate-700 px-2">
+                {currentPage} / {totalPages || 1}
+              </span>
+
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 rounded bg-white border border-slate-300 text-slate-600 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <i className="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
