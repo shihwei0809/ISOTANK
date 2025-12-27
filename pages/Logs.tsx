@@ -11,11 +11,11 @@ interface LogsProps {
 const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
   const [search, setSearch] = useState('');
 
-  // ★ 新增：分頁狀態
+  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50); // 預設 50 筆
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
-  // 1. 先進行篩選與排序
+  // 1. Filter and Sort
   const filteredLogs = logs.slice().sort((a, b) => {
     return new Date(b.time).getTime() - new Date(a.time).getTime();
   }).filter(l =>
@@ -23,71 +23,73 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
     `${l.time} ${l.tank} ${l.action} ${l.zone} ${l.slot || ''} ${l.content} ${l.user} ${l.remark}`.toUpperCase().includes(search.toUpperCase())
   );
 
-  // 2. 計算分頁數據
+  // 2. Pagination Logic
   const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentLogs = filteredLogs.slice(startIndex, startIndex + itemsPerPage);
 
-  // 處理刪除
+  // Handlers
   const handleDelete = (id: string) => {
     if (window.confirm('警告：確定要刪除這筆紀錄嗎？此動作無法復原。')) {
       if (onDelete) onDelete(id);
     }
   };
 
-  // 處理頁碼變更
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
-      // 自動捲動回頂部
       document.querySelector('.overflow-x-auto')?.scrollTo(0, 0);
     }
   };
 
-  // 搜尋時重置回第一頁
   const handleSearchChange = (val: string) => {
     setSearch(val);
     setCurrentPage(1);
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-[1920px] mx-auto animate-fade-in">
+    <div className="p-4 md:p-8 max-w-[1920px] mx-auto animate-fade-in relative">
 
-      {/* 頂部工具列 */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">進出紀錄</h2>
-          <p className="text-slate-500 text-sm">
-            System Logs & History
-            {isSuper && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-xs ml-2 font-bold border border-red-200">SUPER USER</span>}
-          </p>
-        </div>
-
-        <div className="flex gap-3 w-full md:w-auto">
-          {/* 搜尋框 */}
-          <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center flex-1 md:w-80">
-            <i className="fa-solid fa-magnifying-glass text-slate-300 mr-3"></i>
-            <input
-              type="text"
-              value={search}
-              onChange={e => handleSearchChange(e.target.value)}
-              className="w-full outline-none bg-transparent text-slate-600 placeholder-slate-300"
-              placeholder="搜尋關鍵字..."
-            />
+      {/* ★ Modified Header Container ★ 
+          Added: sticky, top-0, z-20, bg-slate-50 (matches main background), and some padding adjustment.
+          This ensures the header stays fixed at the top while scrolling.
+      */}
+      <div className="sticky top-0 z-20 bg-slate-50 pb-4 pt-2 -mt-2">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">進出紀錄</h2>
+            <p className="text-slate-500 text-sm flex items-center mt-1">
+              System Logs & History
+              {isSuper && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded text-xs ml-2 font-bold border border-red-200">SUPER USER</span>}
+            </p>
           </div>
 
-          {/* ★ 新增：每頁筆數選擇 */}
-          <div className="bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center">
-            <span className="text-xs text-slate-400 font-bold mr-2 whitespace-nowrap">顯示</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="outline-none bg-transparent font-bold text-slate-700 cursor-pointer"
-            >
-              <option value={50}>50 筆</option>
-              <option value={100}>100 筆</option>
-              <option value={200}>200 筆</option>
-            </select>
+          <div className="flex gap-3 w-full md:w-auto">
+            {/* Search Bar */}
+            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center flex-1 md:w-80 transition focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300">
+              <i className="fa-solid fa-magnifying-glass text-slate-300 mr-3"></i>
+              <input
+                type="text"
+                value={search}
+                onChange={e => handleSearchChange(e.target.value)}
+                className="w-full outline-none bg-transparent text-slate-600 placeholder-slate-300"
+                placeholder="搜尋關鍵字..."
+              />
+            </div>
+
+            {/* Rows Per Page Selector */}
+            <div className="bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center">
+              <span className="text-xs text-slate-400 font-bold mr-2 whitespace-nowrap">顯示</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                className="outline-none bg-transparent font-bold text-slate-700 cursor-pointer text-sm"
+              >
+                <option value={50}>50 筆</option>
+                <option value={100}>100 筆</option>
+                <option value={200}>200 筆</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -95,6 +97,10 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px]">
         <div className="overflow-x-auto flex-1">
           <table className="w-full text-sm text-left whitespace-nowrap">
+            {/* Table header is already sticky, but we need to adjust its 'top' position if the main header is tall. 
+                However, usually keeping it sticky relative to its container is enough. 
+                Let's keep z-10 for the table header so it slides UNDER the z-20 main header. 
+            */}
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs tracking-wider sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="p-4 bg-slate-50">時間 (Time)</th>
@@ -156,7 +162,7 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
                       </div>
                     </td>
 
-                    {/* 按鈕區域 */}
+                    {/* Admin Actions */}
                     {isSuper && (
                       <td className="p-4 text-center">
                         <div className="flex justify-center items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -184,9 +190,9 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
           </table>
         </div>
 
-        {/* ★ 新增：底部頁碼控制區 */}
+        {/* Footer Pagination */}
         {filteredLogs.length > 0 && (
-          <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col md:flex-row justify-between items-center gap-4 sticky bottom-0 z-10">
             <div className="text-xs text-slate-500 font-bold">
               顯示 {startIndex + 1} - {Math.min(startIndex + itemsPerPage, filteredLogs.length)} 筆，共 {filteredLogs.length} 筆
             </div>
