@@ -47,13 +47,60 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
     setCurrentPage(1);
   };
 
+  // ★★★ 新增：匯出 CSV 功能 ★★★
+  const handleExportCSV = () => {
+    if (filteredLogs.length === 0) {
+      alert("目前沒有資料可匯出");
+      return;
+    }
+
+    const confirmExport = window.confirm(`確定匯出目前篩選的 ${filteredLogs.length} 筆資料？`);
+    if (!confirmExport) return;
+
+    // 定義 CSV 標題
+    const headers = ["時間 (Time)", "槽號 (Tank ID)", "動作 (Action)", "內容物 (Content)", "區域 (Zone)", "儲位 (Slot)", "淨重 (Net)", "總重 (Total)", "車頭 (Head)", "空櫃 (Empty)", "備註 (Remark)", "人員 (User)"];
+
+    // 轉換資料為 CSV 格式 (加上 \uFEFF 以避免 Excel 中文亂碼)
+    let csvContent = "\uFEFF" + headers.join(",") + "\n";
+
+    filteredLogs.forEach(row => {
+      // 處理欄位中的逗號，避免破壞 CSV 結構
+      const cleanContent = (row.content || "").replace(/,/g, " ");
+      const cleanRemark = (row.remark || "").replace(/,/g, " ");
+      const cleanZone = (row.zone || "").replace(/,/g, " ");
+
+      const rowData = [
+        `"${row.time}"`, // 時間加引號避免格式跑掉
+        row.tank,
+        row.action,
+        cleanContent,
+        cleanZone,
+        row.slot || "",
+        row.weight || 0,
+        row.total || 0,
+        row.head || 0,
+        row.empty || 0,
+        cleanRemark,
+        row.user
+      ];
+      csvContent += rowData.join(",") + "\n";
+    });
+
+    // 建立下載連結
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `ISO_Logs_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-[1920px] mx-auto animate-fade-in relative">
 
-      {/* ★ Modified Header Container ★ 
-          Added: sticky, top-0, z-20, bg-slate-50 (matches main background), and some padding adjustment.
-          This ensures the header stays fixed at the top while scrolling.
-      */}
+      {/* Sticky Header */}
       <div className="sticky top-0 z-20 bg-slate-50 pb-4 pt-2 -mt-2">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
           <div>
@@ -65,8 +112,8 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
           </div>
 
           <div className="flex gap-3 w-full md:w-auto">
-            {/* Search Bar */}
-            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center flex-1 md:w-80 transition focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300">
+            {/* 搜尋框 */}
+            <div className="bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center flex-1 md:w-64 transition focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300">
               <i className="fa-solid fa-magnifying-glass text-slate-300 mr-3"></i>
               <input
                 type="text"
@@ -77,6 +124,14 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
               />
             </div>
 
+            {/* ★ 新增：匯出按鈕 */}
+            <button
+              onClick={handleExportCSV}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-green-700 transition flex items-center whitespace-nowrap"
+            >
+              <i className="fa-solid fa-file-csv mr-2"></i> 匯出 CSV
+            </button>
+
             {/* Rows Per Page Selector */}
             <div className="bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-200 flex items-center">
               <span className="text-xs text-slate-400 font-bold mr-2 whitespace-nowrap">顯示</span>
@@ -85,9 +140,9 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
                 onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
                 className="outline-none bg-transparent font-bold text-slate-700 cursor-pointer text-sm"
               >
-                <option value={50}>50 筆</option>
-                <option value={100}>100 筆</option>
-                <option value={200}>200 筆</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
               </select>
             </div>
           </div>
@@ -97,10 +152,6 @@ const Logs: React.FC<LogsProps> = ({ logs, isSuper, onDelete, onEdit }) => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[600px]">
         <div className="overflow-x-auto flex-1">
           <table className="w-full text-sm text-left whitespace-nowrap">
-            {/* Table header is already sticky, but we need to adjust its 'top' position if the main header is tall. 
-                However, usually keeping it sticky relative to its container is enough. 
-                Let's keep z-10 for the table header so it slides UNDER the z-20 main header. 
-            */}
             <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-xs tracking-wider sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="p-4 bg-slate-50">時間 (Time)</th>

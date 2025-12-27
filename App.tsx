@@ -5,10 +5,10 @@ import Entry from './pages/Entry';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Weight from './pages/Weight';
-import Users from './pages/Users'; // ★ V6: 匯入人員管理頁面
+import Users from './pages/Users';
 import { api } from './services/api';
 import { AllData, User, LogEntry } from './types';
-import { useIdleTimer } from './hooks/useIdleTimer'; // ★ V6: 匯入 Idle Hook
+import { useIdleTimer } from './hooks/useIdleTimer';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -23,7 +23,7 @@ function App() {
 
   // --- 登入/登出處理 ---
   const handleLogin = (userId: string, role: 'admin' | 'view' | 'op', isSuper?: boolean) => {
-    setUser({ id: userId, role, isSuper }); // isSuper 會被存入 state
+    setUser({ id: userId, role, isSuper });
     loadData();
   };
 
@@ -32,18 +32,14 @@ function App() {
     setPage('dashboard');
   };
 
-  // --- ★ V6 新功能：閒置 10 分鐘自動登出 ---
-  // 使用自定義 Hook，當閒置觸發時執行 handleLogout
+  // --- 閒置登出 ---
   const onIdle = () => {
     if (user) {
       alert('系統偵測到您已閒置 10 分鐘，為確保資訊安全，系統已自動登出。');
       handleLogout();
     }
   };
-
-  // 啟動監聽 (僅在 user 存在時有效，或 Hook 內部自行判斷)
   useIdleTimer(onIdle);
-
 
   // --- 資料讀取 ---
   const loadData = async (silent = false) => {
@@ -53,7 +49,6 @@ function App() {
     if (!silent) setLoading(false);
   };
 
-  // 定時背景更新 (每 30 秒)
   useEffect(() => {
     if (user) {
       const interval = setInterval(() => loadData(true), 30000);
@@ -61,40 +56,67 @@ function App() {
     }
   }, [user]);
 
-  // --- Log 管理功能 (傳遞給 Logs 元件) ---
+  // --- Log 管理 ---
   const handleDeleteLog = async (logId: string) => {
-    // const res = await api.deleteLog(Number(logId)); 
-    // if (res.status === 'success') loadData(true);
+    // 實作刪除邏輯
     console.log(`Deleting log ${logId}`);
-    alert("功能演示：已發送刪除請求 (需實作 API)");
+    alert("功能演示：已發送刪除請求");
     loadData(true);
   };
 
   const handleEditLog = (entry: LogEntry) => {
     console.log("Edit entry:", entry);
-    alert(`功能演示：編輯 ${entry.tank} (需實作 Modal)`);
+    alert(`功能演示：編輯 ${entry.tank}`);
   };
 
-
-  // --- 頁面路由與選單 ---
   if (!user) {
     return <Login onLogin={handleLogin} />;
   }
 
-  const menuItems = [
-    { id: 'dashboard', label: '場站總覽', icon: 'fa-chart-pie' },
-    { id: 'entry', label: '進場作業', icon: 'fa-truck-ramp-box' },
-    { id: 'weight', label: '重量維護', icon: 'fa-scale-balanced' },
-    { id: 'logs', label: '進出紀錄', icon: 'fa-list' },
+  // ★★★ 修改：定義所有選單項目及其允許的角色 ★★★
+  const allMenuItems = [
+    {
+      id: 'dashboard',
+      label: '場站總覽',
+      icon: 'fa-chart-pie',
+      allowedRoles: ['view', 'op', 'admin']
+    },
+    {
+      id: 'entry',
+      label: '進場作業',
+      icon: 'fa-truck-ramp-box',
+      allowedRoles: ['op', 'admin'] // 只有 OP 和 Admin 可見
+    },
+    {
+      id: 'weight',
+      label: '重量維護',
+      icon: 'fa-scale-balanced',
+      allowedRoles: ['admin'] // 假設只有 Admin 可見 (若 OP 也要請加入 'op')
+    },
+    {
+      id: 'logs',
+      label: '進出紀錄',
+      icon: 'fa-list',
+      allowedRoles: ['view', 'op', 'admin']
+    },
+    {
+      id: 'settings',
+      label: '區域設定',
+      icon: 'fa-gear',
+      allowedRoles: ['admin']
+    },
+    {
+      id: 'users',
+      label: '人員管理',
+      icon: 'fa-users-gear',
+      allowedRoles: ['admin'] // Admin 才能看，內部再檢查 isSuper
+    }
   ];
 
-  // Admin 才看得到區域設定
-  if (user.role === 'admin') {
-    menuItems.push({ id: 'settings', label: '區域設定', icon: 'fa-gear' });
-    // ★ V6 新功能：只有 Admin 且 Super User 才能看到人員管理 (或是只要 Admin 就可以，視需求而定)
-    // 這裡假設只要是 Admin 就能看到，但內部操作受 Users 元件邏輯保護
-    menuItems.push({ id: 'users', label: '人員管理', icon: 'fa-users-gear' });
-  }
+  // 根據目前使用者角色過濾選單
+  const visibleMenuItems = allMenuItems.filter(item =>
+    item.allowedRoles.includes(user.role)
+  );
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800">
@@ -102,18 +124,16 @@ function App() {
       {/* --- 左側側邊欄 --- */}
       <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 transition-all duration-300">
         <div className="p-8 text-center border-b border-slate-800">
-          {/* Logo 區域 */}
           <div className="w-20 h-20 mx-auto mb-4 bg-white rounded-full flex items-center justify-center shadow-lg ring-4 ring-amber-500/30">
             <span className="text-amber-600 text-3xl font-black">鴻</span>
           </div>
-
           <h2 className="text-2xl font-bold tracking-wider text-white">鴻勝 <span className="text-amber-500">ISO</span></h2>
           <p className="text-slate-400 text-xs mt-2 uppercase tracking-widest">Tank Management</p>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-6 custom-scrollbar">
           <ul className="space-y-2 px-4">
-            {menuItems.map((item) => (
+            {visibleMenuItems.map((item) => (
               <li key={item.id}>
                 <button
                   onClick={() => setPage(item.id)}
@@ -142,12 +162,12 @@ function App() {
                 <div className="text-sm font-bold text-white capitalize">{user.id}</div>
               </div>
             </div>
-            {/* 顯示角色標籤 */}
             <span className={`text-[10px] px-2 py-1 rounded border font-bold ${user.isSuper ? 'border-red-500 text-red-500' :
               user.role === 'admin' ? 'border-amber-500 text-amber-500' :
-                'border-blue-500 text-blue-500'
+                user.role === 'op' ? 'border-blue-500 text-blue-500' :
+                  'border-slate-500 text-slate-500'
               }`}>
-              {user.isSuper ? 'SUPER' : user.role === 'admin' ? 'ADMIN' : 'VIEW'}
+              {user.isSuper ? 'SUPER' : user.role.toUpperCase()}
             </span>
           </div>
           <button
@@ -162,13 +182,11 @@ function App() {
 
       {/* --- 右側主內容區 --- */}
       <main className="flex-1 overflow-y-auto relative bg-slate-50">
-        {/* 頂部標題列 */}
         <header className="bg-white shadow-sm sticky top-0 z-10 px-8 py-5 flex justify-between items-center border-b border-slate-200">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-slate-800">
-              {menuItems.find(i => i.id === page)?.label}
+              {visibleMenuItems.find(i => i.id === page)?.label}
             </h1>
-            {/* 如果是 Super User 且在 Logs 頁面，顯示提示 */}
             {page === 'logs' && user.isSuper && (
               <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded font-bold border border-red-200">
                 <i className="fa-solid fa-shield-halved mr-1"></i> Admin Mode
@@ -185,11 +203,11 @@ function App() {
           </button>
         </header>
 
-        {/* 頁面內容路由 */}
         <div className="p-6 md:p-8 max-w-[1920px] mx-auto">
           {page === 'dashboard' && <Dashboard zones={data.zones} inventory={data.inventory} logs={data.logs} />}
 
-          {page === 'entry' && (
+          {/* 安全性檢查：雖然隱藏了選單，但最好也避免渲染元件 */}
+          {page === 'entry' && (user.role === 'admin' || user.role === 'op') && (
             <Entry
               zones={data.zones}
               inventory={data.inventory}
@@ -198,7 +216,7 @@ function App() {
             />
           )}
 
-          {page === 'weight' && (
+          {page === 'weight' && user.role === 'admin' && (
             <Weight
               registry={data.registry}
               onRefresh={() => loadData(false)}
@@ -211,13 +229,13 @@ function App() {
           {page === 'logs' && (
             <Logs
               logs={data.logs}
-              isSuper={!!user.isSuper} // ★ V6: 傳遞權限
+              isSuper={!!user.isSuper}
               onDelete={handleDeleteLog}
               onEdit={handleEditLog}
             />
           )}
 
-          {page === 'settings' && (
+          {page === 'settings' && user.role === 'admin' && (
             <Settings
               zones={data.zones}
               onSave={api.updateSettings}
@@ -225,8 +243,7 @@ function App() {
             />
           )}
 
-          {/* ★ V6: 人員管理頁面 */}
-          {page === 'users' && (
+          {page === 'users' && user.role === 'admin' && (
             <Users currentUserRole={user.role} />
           )}
         </div>
