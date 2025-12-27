@@ -19,15 +19,11 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // 1. 計算全場統計 (動態計算)
+  // 1. 計算全場統計
   const stats = useMemo(() => {
     const totalTanks = inventory.length;
-
-    // 讀取 limit，若無則預設 35
     const totalCapacity = zones.reduce((sum, zone) => sum + (zone.limit || 35), 0);
-
     const utilization = totalCapacity > 0 ? ((totalTanks / totalCapacity) * 100).toFixed(1) : '0';
-
     return { totalTanks, totalCapacity, utilization };
   }, [inventory, zones]);
 
@@ -49,60 +45,59 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   return (
     <div className="max-w-[1920px] mx-auto space-y-6 pb-10">
 
-      {/* --- 頂部標題與按鈕 --- */}
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">場站總覽</h2>
-          <p className="text-slate-500 text-sm mt-1">ISO TRACKER Dashboard</p>
-        </div>
-      </div>
+      {/* 1. 已移除原本的 "場站總覽" 標題區塊 
+      */}
 
-      {/* --- 統計數據與搜尋區 --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 z-10">總容量 / 利用率</p>
-          <div className="flex items-baseline space-x-3 z-10">
-            <p className="text-5xl font-black text-slate-800">{stats.totalCapacity}</p>
-            <span className="text-lg font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
-              {stats.utilization}%
-            </span>
+      {/* 2. 將統計數據與搜尋區改為 Sticky (固定在頂部) 
+          加入 sticky top-0 z-20 bg-slate-50 等樣式
+      */}
+      <div className="sticky top-0 z-20 bg-slate-50 py-4 -mt-6"> {/* -mt-6 用來抵消外層 padding，讓它貼頂更自然 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* 卡片 1: 總容量 */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 z-10">總容量 / 利用率</p>
+            <div className="flex items-baseline space-x-3 z-10">
+              <p className="text-5xl font-black text-slate-800">{stats.totalCapacity}</p>
+              <span className="text-lg font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">
+                {stats.utilization}%
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-amber-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 z-10">在庫 ISO TANK 數</p>
-          <p className="text-5xl font-black text-amber-500 z-10">{stats.totalTanks}</p>
-        </div>
+          {/* 卡片 2: 在庫數 */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-24 h-24 bg-amber-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 z-10">在庫 ISO TANK 數</p>
+            <p className="text-5xl font-black text-amber-500 z-10">{stats.totalTanks}</p>
+          </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-          <i className="fa-solid fa-magnifying-glass text-slate-300 text-xl mr-4"></i>
-          <input
-            type="text"
-            placeholder="搜尋槽號、內容物、區域..."
-            className="w-full h-full outline-none text-lg text-slate-600 placeholder-slate-300"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className="text-slate-400 hover:text-slate-600">
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-          )}
+          {/* 卡片 3: 搜尋列 */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center transition focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300">
+            <i className="fa-solid fa-magnifying-glass text-slate-300 text-xl mr-4"></i>
+            <input
+              type="text"
+              placeholder="搜尋槽號、內容物、區域..."
+              className="w-full h-full outline-none text-lg text-slate-600 placeholder-slate-300"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="text-slate-400 hover:text-slate-600">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* --- 區域看板 (Kanban View) --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
         {zones.map((zone) => {
-          // ★★★ 關鍵修正：將 zone.name 改回 zone.id ★★★
-          // 因為資料庫 Inventory 表的 zone 欄位儲存的是 ID (例如 "Z-1")
           const zoneItems = filteredInventory.filter(i => i.zone === zone.id);
-
           zoneItems.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
-          // 區域容量設定讀取 limit
           const zoneCapacity = zone.limit || 35;
           const progressPercent = (zoneItems.length / zoneCapacity) * 100;
 
