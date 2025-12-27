@@ -23,7 +23,7 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   const stats = useMemo(() => {
     const totalTanks = inventory.length;
 
-    // ★ 修正：讀取 limit，若無則預設 35
+    // 讀取 limit，若無則預設 35
     const totalCapacity = zones.reduce((sum, zone) => sum + (zone.limit || 35), 0);
 
     const utilization = totalCapacity > 0 ? ((totalTanks / totalCapacity) * 100).toFixed(1) : '0';
@@ -96,10 +96,13 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
       {/* --- 區域看板 (Kanban View) --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
         {zones.map((zone) => {
-          const zoneItems = filteredInventory.filter(i => i.zone === zone.name); // 注意：Inventory 存的是 zone name
+          // ★★★ 關鍵修正：將 zone.name 改回 zone.id ★★★
+          // 因為資料庫 Inventory 表的 zone 欄位儲存的是 ID (例如 "Z-1")
+          const zoneItems = filteredInventory.filter(i => i.zone === zone.id);
+
           zoneItems.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
-          // ★ 修正：區域容量設定讀取 limit
+          // 區域容量設定讀取 limit
           const zoneCapacity = zone.limit || 35;
           const progressPercent = (zoneItems.length / zoneCapacity) * 100;
 
