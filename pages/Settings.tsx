@@ -8,29 +8,24 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
-  // 注意：這裡將 limit 改為 capacity 以配合 Dashboard 的統計邏輯
   const [localZones, setLocalZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // 深拷貝以避免直接修改 props
     setLocalZones(JSON.parse(JSON.stringify(zones)));
   }, [zones]);
 
   const handleChange = (index: number, field: keyof Zone, value: string | number) => {
     const updated = [...localZones];
-    // @ts-ignore: Dynamic assignment
+    // @ts-ignore
     updated[index] = { ...updated[index], [field]: value };
-
-    // Sync limit removed - using capacity only
-
     setLocalZones(updated);
   };
 
   const handleAdd = () => {
     const newId = `Z${(localZones.length + 1).toString().padStart(2, '0')}`;
-    // 預設容量設為 35，同時設定 limit 以符合型別定義
-    setLocalZones([...localZones, { id: newId, name: 'New Zone', capacity: 35 }]);
+    // ★ 修改：這裡使用 limit
+    setLocalZones([...localZones, { id: newId, name: 'New Zone', limit: 35 }]);
   };
 
   const handleRemove = (index: number) => {
@@ -47,7 +42,6 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
     try {
       const res = await onSave(localZones);
       if (res.status === 'success') {
-        // 使用自定義 alert 或 toast 更好，這裡暫用 alert
         alert('設定已成功更新！');
         onRefresh();
       } else {
@@ -75,7 +69,6 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
           </button>
         </div>
 
-        {/* 表頭 */}
         <div className="bg-slate-50 p-3 rounded-t-xl grid grid-cols-12 gap-4 text-xs font-bold text-slate-500 uppercase tracking-wider border border-slate-200 border-b-0">
           <div className="col-span-3">區域代號 (ID)</div>
           <div className="col-span-5">區域名稱 (Name)</div>
@@ -83,7 +76,6 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
           <div className="col-span-1 text-center">刪除</div>
         </div>
 
-        {/* 列表內容 */}
         <div className="border border-slate-200 rounded-b-xl overflow-hidden divide-y divide-slate-100 bg-white">
           {localZones.map((z, i) => (
             <div key={i} className="grid grid-cols-12 gap-4 items-center p-3 hover:bg-slate-50 transition">
@@ -110,8 +102,9 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
                   <input
                     type="number"
                     className="w-full border border-slate-200 rounded px-3 py-2 text-sm text-center font-bold text-slate-700 focus:border-blue-500 outline-none transition"
-                    value={z.capacity || 35} // 預設顯示
-                    onChange={(e) => handleChange(i, 'capacity', parseInt(e.target.value))}
+                    // ★ 修改：使用 limit
+                    value={z.limit || 35}
+                    onChange={(e) => handleChange(i, 'limit', parseInt(e.target.value))}
                   />
                   <span className="absolute right-8 top-2 text-xs text-slate-400 hidden sm:block">TEU</span>
                 </div>

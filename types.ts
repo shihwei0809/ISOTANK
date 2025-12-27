@@ -1,7 +1,7 @@
 export interface Zone {
   id: string;
   name: string;
-  capacity?: number; // V6: 支援動態容量
+  limit?: number; // V6: 支援動態容量
 }
 
 export interface InventoryItem {

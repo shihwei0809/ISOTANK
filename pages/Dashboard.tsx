@@ -23,9 +23,8 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   const stats = useMemo(() => {
     const totalTanks = inventory.length;
 
-    // 假設 Zone 裡有 capacity 欄位，若無則預設 35 (模擬 9.1 版邏輯)
-    // 您可以在 types.ts 的 Zone 定義中加入 capacity: number
-    const totalCapacity = zones.reduce((sum, zone) => sum + (zone.capacity || 35), 0);
+    // ★ 修改：讀取 limit 欄位，如果沒有則預設 35
+    const totalCapacity = zones.reduce((sum, zone) => sum + (zone.limit || 35), 0);
 
     const utilization = totalCapacity > 0 ? ((totalTanks / totalCapacity) * 100).toFixed(1) : '0';
 
@@ -112,7 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
           zoneItems.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
           // 區域容量設定
-          const zoneCapacity = zone.capacity || 35;
+          const zoneCapacity = zone.limit || 35;
           const progressPercent = (zoneItems.length / zoneCapacity) * 100;
 
           let progressColor = 'bg-blue-500';
