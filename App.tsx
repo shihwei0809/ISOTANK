@@ -62,8 +62,8 @@ function App() {
   }, [user]);
 
   // --- Log 管理功能 (傳遞給 Logs 元件) ---
-  const handleDeleteLog = async (logId: number) => { // 注意：這裡是 string 還是 number 取決於 LogEntry 定義，與 Logs.tsx 保持一致
-    // const res = await api.deleteLog(logId);
+  const handleDeleteLog = async (logId: string) => {
+    // const res = await api.deleteLog(Number(logId)); 
     // if (res.status === 'success') loadData(true);
     console.log(`Deleting log ${logId}`);
     alert("功能演示：已發送刪除請求 (需實作 API)");
