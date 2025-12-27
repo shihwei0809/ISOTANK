@@ -10,18 +10,10 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // --- 輔助函式：計算滯留天數 ---
-  const getDaysInStock = (dateString?: string) => {
-    if (!dateString) return 0;
-    const entryDate = new Date(dateString);
-    const today = new Date();
-    const diffTime = Math.abs(today.getTime() - entryDate.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
-
   // 1. 計算全場統計
   const stats = useMemo(() => {
     const totalTanks = inventory.length;
+    // 讀取 limit
     const totalCapacity = zones.reduce((sum, zone) => sum + (zone.limit || 35), 0);
     const utilization = totalCapacity > 0 ? ((totalTanks / totalCapacity) * 100).toFixed(1) : '0';
     return { totalTanks, totalCapacity, utilization };
@@ -43,15 +35,19 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   };
 
   return (
-    <div className="max-w-[1920px] mx-auto space-y-6 pb-10">
+    <div className="max-w-[1920px] mx-auto pb-10">
 
-      {/* 1. 已移除原本的 "場站總覽" 標題區塊 
+      {/* 1. 標題區塊已移除 (原本的 h2 場站總覽...) 
       */}
 
-      {/* 2. 將統計數據與搜尋區改為 Sticky (固定在頂部) 
-          加入 sticky top-0 z-20 bg-slate-50 等樣式
+      {/* 2. 固定統計數據列 
+          - sticky: 啟用黏性定位
+          - top-[72px]: 設定距離頂部 72px (避開系統 Header 的高度)，讓它剛好接在 Header 下方
+          - z-10: 確保層級高於下方內容
+          - bg-slate-50: 設定背景色遮擋下方捲動的內容
+          - pb-4 pt-2: 調整上下間距讓視覺更舒適
       */}
-      <div className="sticky top-0 z-20 bg-slate-50 py-4 -mt-6"> {/* -mt-6 用來抵消外層 padding，讓它貼頂更自然 */}
+      <div className="sticky top-[72px] z-10 bg-slate-50 pb-6 pt-2">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* 卡片 1: 總容量 */}
@@ -93,8 +89,9 @@ const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
       </div>
 
       {/* --- 區域看板 (Kanban View) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start mt-2">
         {zones.map((zone) => {
+          // 比對 ID
           const zoneItems = filteredInventory.filter(i => i.zone === zone.id);
           zoneItems.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
