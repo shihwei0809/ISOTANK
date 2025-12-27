@@ -1,0 +1,6 @@
+App.tsx(8,8): error TS1192: Module '"C:/Users/C606/Desktop/GOOGLE AI APP/ISOTANK/pages/Users"' has no default export.
+App.tsx(26,27): error TS2322: Type '"admin" | "view" | "op"' is not assignable to type '"admin" | "view"'.
+  Type '"op"' is not assignable to type '"admin" | "view"'.
+pages/Settings.tsx(33,20): error TS2322: Type 'Zone | { id: string; name: string; capacity: number; }' is not assignable to type 'Zone'.
+  Property 'limit' is missing in type '{ id: string; name: string; capacity: number; }' but required in type 'Zone'.
+pages/Settings.tsx(33,35): error TS2741: Property 'limit' is missing in type '{ id: string; name: string; capacity: number; }' but required in type 'Zone'.

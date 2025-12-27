@@ -22,13 +22,7 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
     // @ts-ignore: Dynamic assignment
     updated[index] = { ...updated[index], [field]: value };
 
-    // Sync limit and capacity for backward compatibility
-    if (field === 'capacity') {
-      updated[index].limit = value as number;
-    }
-    if (field === 'limit') {
-      updated[index].capacity = value as number;
-    }
+    // Sync limit removed - using capacity only
 
     setLocalZones(updated);
   };
@@ -36,7 +30,7 @@ const Settings: React.FC<SettingsProps> = ({ zones, onSave, onRefresh }) => {
   const handleAdd = () => {
     const newId = `Z${(localZones.length + 1).toString().padStart(2, '0')}`;
     // 預設容量設為 35，同時設定 limit 以符合型別定義
-    setLocalZones([...localZones, { id: newId, name: 'New Zone', capacity: 35, limit: 35 }]);
+    setLocalZones([...localZones, { id: newId, name: 'New Zone', capacity: 35 }]);
   };
 
   const handleRemove = (index: number) => {

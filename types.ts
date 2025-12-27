@@ -1,44 +1,33 @@
-export interface User {
-  id: string;
-  name?: string;
-  role: 'admin' | 'view';
-  isSuper?: boolean;
-}
-
 export interface Zone {
   id: string;
   name: string;
-  limit: number;
-  capacity?: number;
+  capacity?: number; // V6: 支援動態容量
 }
 
-export interface Tank {
+export interface InventoryItem {
   id: string;
   content: string;
-  weight: number | string;
-  zone: string; // This maps to Zone ID or Name depending on context, normalized to Zone ID in our app
-  zoneName?: string;
+  zone: string;
   time: string;
+  weight?: number;
   remark?: string;
-  slot?: string;
+  slot?: string; // V6: 支援儲位
 }
 
-export type InventoryItem = Tank;
-
 export interface LogEntry {
-  id: number;
+  id: number; // Supabase ID
   time: string;
   tank: string;
-  action: '進場' | '出場' | '移區' | '更新';
-  zone: string;
-  user: string;
+  action: string;
   content: string;
-  weight: number | string;
+  zone: string;
+  slot?: string; // V6
+  weight?: number | string; // 兼容 string 以防萬一
   total?: number | string;
   head?: number | string;
   empty?: number | string;
   remark?: string;
-  slot?: string;
+  user: string;
 }
 
 export interface RegistryItem {
@@ -54,15 +43,33 @@ export interface DashboardStats {
   currentInventory: number;
 }
 
-export interface ApiResponse<T> {
+// 核心修改：統一的使用者介面
+export interface User {
+  id: string;          // 統一使用 id，不使用 user
+  name?: string;
+  role: 'admin' | 'op' | 'view';
+  isSuper: boolean;    // 統一使用 boolean
+}
+
+// 統一的 API 回傳格式
+export interface ApiResponse {
   status: 'success' | 'error';
   message?: string;
-  data?: T;
+  zones?: Zone[];
+  inventory?: InventoryItem[];
+  logs?: LogEntry[];
+  registry?: RegistryItem[];
+  users?: User[];      // 使用上面定義的 User
+  tank?: any;
+  history?: any[];
+  user?: string;       // 登入回傳用
+  role?: string;
+  isSuper?: boolean;
 }
 
 export interface AllData {
   zones: Zone[];
-  inventory: Tank[];
+  inventory: InventoryItem[];
   logs: LogEntry[];
   registry: RegistryItem[];
 }

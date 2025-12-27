@@ -5,11 +5,10 @@ import Entry from './pages/Entry';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import Weight from './pages/Weight';
-// 假設您有一個 Users 頁面元件，若無可先用 placeholder 或 Settings 代替
-// import Users from './pages/Users'; 
+import Users from './pages/Users'; // ★ V6: 匯入人員管理頁面
 import { api } from './services/api';
 import { AllData, User, LogEntry } from './types';
-import { useIdleTimer } from './hooks/useIdleTimer'; // ★ V6 新增：匯入 Idle Hook
+import { useIdleTimer } from './hooks/useIdleTimer'; // ★ V6: 匯入 Idle Hook
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -23,7 +22,7 @@ function App() {
   const [loading, setLoading] = useState(false);
 
   // --- 登入/登出處理 ---
-  const handleLogin = (userId: string, role: 'admin' | 'view', isSuper?: boolean) => {
+  const handleLogin = (userId: string, role: 'admin' | 'view' | 'op', isSuper?: boolean) => {
     setUser({ id: userId, role, isSuper }); // isSuper 會被存入 state
     loadData();
   };
@@ -63,12 +62,9 @@ function App() {
   }, [user]);
 
   // --- Log 管理功能 (傳遞給 Logs 元件) ---
-  const handleDeleteLog = async (logId: number) => {
-    // 呼叫 API 刪除 (請確認 api.ts 有實作 deleteLog)
-    // const res = await api.deleteLog(logId); 
+  const handleDeleteLog = async (logId: number) => { // 注意：這裡是 string 還是 number 取決於 LogEntry 定義，與 Logs.tsx 保持一致
+    // const res = await api.deleteLog(logId);
     // if (res.status === 'success') loadData(true);
-
-    // 暫時模擬：
     console.log(`Deleting log ${logId}`);
     alert("功能演示：已發送刪除請求 (需實作 API)");
     loadData(true);
@@ -95,10 +91,8 @@ function App() {
   // Admin 才看得到區域設定
   if (user.role === 'admin') {
     menuItems.push({ id: 'settings', label: '區域設定', icon: 'fa-gear' });
-  }
-
-  // ★ V6 新功能：只有 Super User 才看得到「人員管理」
-  if (user.isSuper) {
+    // ★ V6 新功能：只有 Admin 且 Super User 才能看到人員管理 (或是只要 Admin 就可以，視需求而定)
+    // 這裡假設只要是 Admin 就能看到，但內部操作受 Users 元件邏輯保護
     menuItems.push({ id: 'users', label: '人員管理', icon: 'fa-users-gear' });
   }
 
@@ -231,13 +225,9 @@ function App() {
             />
           )}
 
-          {/* 若無 Users 頁面，暫時顯示施工中 */}
+          {/* ★ V6: 人員管理頁面 */}
           {page === 'users' && (
-            <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
-              <i className="fa-solid fa-users-gear text-6xl mb-4"></i>
-              <h2 className="text-xl font-bold text-slate-600">人員權限管理</h2>
-              <p>此功能正在開發中 (V6.1)</p>
-            </div>
+            <Users currentUserRole={user.role} />
           )}
         </div>
       </main>
