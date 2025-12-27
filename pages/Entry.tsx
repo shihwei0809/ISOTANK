@@ -14,17 +14,17 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
   const [id, setId] = useState('');
   const [content, setContent] = useState('');
   const [zone, setZone] = useState('');
-  const [slot, setSlot] = useState(''); // 新增：儲位
+  const [remark, setRemark] = useState(''); // 新增備註欄位
 
   // 重量相關
   const [total, setTotal] = useState('');
   const [head, setHead] = useState('');
-  const [empty, setEmpty] = useState('');
+  const [empty, setEmpty] = useState(''); // 空櫃重
   const [net, setNet] = useState(0);
 
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState({ type: '', text: '' });
-  const [dataFound, setDataFound] = useState(false); // 用於顯示是否找到舊資料
+  const [dataFound, setDataFound] = useState(false);
 
   // 初始化：預設選第一個區域
   useEffect(() => {
@@ -46,7 +46,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
   useEffect(() => {
     const timer = setTimeout(async () => {
       const searchId = id.trim();
-      if (!searchId || searchId.length < 4) { // 改為 4 碼才觸發，減少請求
+      if (!searchId || searchId.length < 3) {
         setDataFound(false);
         return;
       }
@@ -54,7 +54,6 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       const res = await api.getTankMaintenance(searchId);
 
       if (res.status === 'success' && res.tank) {
-        // 自動填入資料
         if (res.tank.content) setContent(res.tank.content);
         if (res.tank.lastHead) setHead(String(res.tank.lastHead));
         if (res.tank.empty) setEmpty(String(res.tank.empty));
@@ -63,7 +62,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       } else {
         setDataFound(false);
       }
-    }, 500);
+    }, 500); // 延遲 0.5 秒
 
     return () => clearTimeout(timer);
   }, [id]);
@@ -85,7 +84,7 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
       content,
       zone,
       zoneName: currentZoneName,
-      slot: slot.toUpperCase(), // 傳送儲位資料
+      remark, // 傳送備註
       totalWeight: parseFloat(total) || 0,
       headWeight: parseFloat(head) || 0,
       emptyWeight: parseFloat(empty) || 0,
@@ -98,10 +97,9 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
 
     if (res.status === 'success') {
       setMsg({ type: 'success', text: res.message });
-      // 保留部分欄位方便連續輸入，清空關鍵欄位
       setId('');
       setTotal('');
-      setSlot('');
+      setRemark('');
       setDataFound(false);
       onRefresh();
     } else {
@@ -110,138 +108,134 @@ const Entry: React.FC<EntryProps> = ({ zones, inventory, onRefresh, user }) => {
     setLoading(false);
   };
 
+  // 取得現在時間字串
+  const nowStr = new Date().toLocaleString('zh-TW', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-        <div className="flex items-center justify-between mb-6 border-b pb-4">
-          <div className="flex items-center">
-            <i className="fa-solid fa-truck-ramp-box text-2xl text-amber-500 mr-3"></i>
-            <h2 className="text-xl font-bold text-slate-800">ISO TANK 進場作業</h2>
-          </div>
-          <div className="text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded">
-            Version 9.1
-          </div>
+    <div className="max-w-4xl mx-auto p-4">
+
+      {msg.text && (
+        <div className={`p-4 mb-4 rounded-lg text-center font-bold flex items-center justify-center gap-2 ${msg.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}>
+          <i className={`fa-solid ${msg.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}`}></i>
+          {msg.text}
         </div>
+      )}
 
-        {msg.text && (
-          <div className={`p-4 mb-4 rounded-lg text-center font-bold flex items-center justify-center gap-2 ${msg.type === 'error' ? 'bg-red-50 text-red-500' : 'bg-green-50 text-green-600'}`}>
-            <i className={`fa-solid ${msg.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}`}></i>
-            {msg.text}
+      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+
+        {/* 第一列：時間、車號、區域 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">作業時間</label>
+            <div className="relative">
+              <input type="text" value={nowStr} disabled className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 cursor-not-allowed" />
+              <i className="fa-regular fa-calendar absolute right-3 top-3.5 text-slate-400"></i>
+            </div>
           </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-
-          {/* 車號輸入區 */}
           <div className="relative">
-            <label className="block text-sm font-bold text-slate-600 mb-1">車號 (Tank ID) *</label>
+            <label className="block text-sm font-bold text-slate-600 mb-1">槽號 *</label>
             <input
               type="text"
               value={id}
-              onChange={(e) => setId(e.target.value.toUpperCase())} // 強制大寫
-              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition font-mono text-lg"
-              placeholder="例如: TNKU1234567"
+              onChange={(e) => setId(e.target.value.toUpperCase())}
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition font-mono font-bold text-slate-700"
+              placeholder="輸入車號 (如: E61)"
               required
             />
             {dataFound && (
-              <div className="absolute top-0 right-0 mt-8 mr-3 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100 animate-pulse">
-                <i className="fa-solid fa-clock-rotate-left mr-1"></i> 已帶入歷史資料
+              <div className="text-xs text-red-500 mt-1 flex items-center">
+                <i className="fa-solid fa-circle-info mr-1"></i> 已自動帶入歷史資訊
               </div>
             )}
           </div>
-
           <div>
-            <label className="block text-sm font-bold text-slate-600 mb-1">內容物 (Content)</label>
+            <label className="block text-sm font-bold text-slate-600 mb-1">存放區域 *</label>
+            <select
+              value={zone}
+              onChange={(e) => setZone(e.target.value)}
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition bg-white font-bold text-slate-700"
+            >
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>{z.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* 第二列：內容物、備註 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">內容物</label>
             <input
               type="text"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition font-bold text-slate-700"
               placeholder="請輸入化學品名稱"
             />
           </div>
-
-          {/* 區域與儲位 (並排) */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-slate-600 mb-1">區域 (Zone) *</label>
-              <select
-                value={zone}
-                onChange={(e) => setZone(e.target.value)}
-                className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition bg-white"
-              >
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-600 mb-1">儲位 (Slot)</label>
-              <input
-                type="text"
-                value={slot}
-                onChange={(e) => setSlot(e.target.value)}
-                className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
-                placeholder="例如: A-01"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">備註</label>
+            <input
+              type="text"
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+              className="w-full p-3 border-2 border-slate-200 rounded-lg outline-none focus:border-amber-500 transition"
+              placeholder="選填備註事項"
+            />
           </div>
+        </div>
 
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">重量資訊 (Weight Info)</h3>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">總重 (Total)</label>
-                <input
-                  type="number"
-                  value={total}
-                  onChange={(e) => setTotal(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-blue-500 outline-none"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">車頭 (Head)</label>
-                <input
-                  type="number"
-                  value={head}
-                  onChange={(e) => setHead(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-blue-500 outline-none"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">空櫃 (Empty)</label>
-                <input
-                  type="number"
-                  value={empty}
-                  onChange={(e) => setEmpty(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-blue-500 outline-none"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-              <span className="text-slate-600 font-bold text-sm">計算淨重 (Net):</span>
-              <span className="text-3xl font-black text-slate-800">{net.toLocaleString()} <span className="text-sm font-normal text-slate-500">kg</span></span>
-            </div>
+        {/* 第三列：重量資訊 */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-slate-50 p-4 rounded-lg border border-slate-100">
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">總重</label>
+            <input
+              type="number"
+              value={total}
+              onChange={(e) => setTotal(e.target.value)}
+              className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-blue-500 text-center font-bold text-lg"
+              placeholder="0"
+            />
           </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">車頭重</label>
+            <input
+              type="number"
+              value={head}
+              onChange={(e) => setHead(e.target.value)}
+              className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-blue-500 text-center font-bold text-lg"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-600 mb-1">空櫃重</label>
+            <input
+              type="number"
+              value={empty}
+              onChange={(e) => setEmpty(e.target.value)}
+              className="w-full p-3 border border-slate-300 rounded-lg outline-none focus:border-blue-500 text-center font-bold text-lg"
+              placeholder="0"
+            />
+          </div>
+          {/* 淨重顯示區塊 (參考截圖樣式) */}
+          <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex flex-col items-center justify-center h-[82px]">
+            <span className="text-blue-800 font-bold text-sm mb-1">淨重 (Net)</span>
+            <span className="text-3xl font-black text-blue-600">{net.toLocaleString()}</span>
+          </div>
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full p-4 text-white font-bold rounded-xl shadow-lg transition flex justify-center items-center transform active:scale-95
-              ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-xl'}`}
-          >
-            {loading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>}
-            {loading ? '資料處理中...' : '確認進場 (GATE IN)'}
-          </button>
+        <button
+          type="submit"
+          disabled={loading}
+          className={`w-full p-4 text-white font-bold rounded-lg shadow-lg transition flex justify-center items-center text-lg
+            ${loading ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 hover:shadow-xl'}`}
+        >
+          {loading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : null}
+          確認作業
+        </button>
 
-        </form>
-      </div>
+      </form>
     </div>
   );
 };
