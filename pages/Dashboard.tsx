@@ -7,6 +7,16 @@ interface DashboardProps {
   logs: LogEntry[];
 }
 
+
+// 添加計算庫存天數的輔助函式
+const getDaysInStock = (time?: string): number => {
+  if (!time) return 0;
+  const start = new Date(time);
+  const now = new Date();
+  const diff = now.getTime() - start.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ zones, inventory }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
